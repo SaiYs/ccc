@@ -1,7 +1,8 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Reserved(&'static str),
-    Num(u32),
+    Ident(char),
+    Num(String),
     EOF,
 }
 
@@ -23,13 +24,14 @@ impl TokenList {
                     let l = (cur..)
                         .take_while(|&x| x < source.len() && source[x].is_digit(10))
                         .count();
-                    let n = source[cur..cur + l]
-                        .iter()
-                        .collect::<String>()
-                        .parse::<u32>()
-                        .unwrap();
+                    let n = source[cur..cur + l].iter().collect::<String>();
+
                     tokens.push(Token::Num(n));
                     cur += l;
+                }
+                id if id.is_ascii_lowercase() => {
+                    tokens.push(Token::Ident(id));
+                    cur += 1;
                 }
                 _ => {
                     if source[cur..].starts_with(&['=', '=']) {
@@ -80,6 +82,14 @@ impl TokenList {
                         tokens.push(Token::Reserved(")"));
                         cur += 1;
                     }
+                    if source[cur..].starts_with(&['=']) {
+                        tokens.push(Token::Reserved("="));
+                        cur += 1;
+                    }
+                    if source[cur..].starts_with(&[';']) {
+                        tokens.push(Token::Reserved(";"));
+                        cur += 1;
+                    }
                 }
             }
         }
@@ -111,28 +121,18 @@ impl TokenList {
         }
     }
 
-    fn expect_number(&mut self) -> u32 {
+    fn expect_number(&mut self) -> String {
         let res = match self.get() {
-            Token::Num(n) => *n,
+            Token::Num(n) => n.clone(),
             _ => panic!("expected number but found not number"),
         };
         self.head += 1;
         res
     }
 
-    // fn expect_reserved(&mut self) -> String {
-    //     match self.get() {
-    //         Token::Reserved(ref s) => {
-    //             self.head += 1;
-    //             s.clone()
-    //         }
-    //         _ => panic!("expected reserved but found not reserved"),
-    //     }
-    // }
-
-    // fn eof(&self) -> bool {
-    //     self.get() == Token::EOF
-    // }
+    fn eof(&self) -> bool {
+        self.get() == &Token::EOF
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -141,11 +141,14 @@ pub enum NodeKind {
     Sub,
     Mul,
     Div,
-    Num(u32),
     Eq,
     Neq,
     Le,
     LeEq,
+    Assign,
+    Semi,
+    Num { value: String },
+    Local { offset: u8 },
 }
 
 #[derive(Debug)]
@@ -157,11 +160,43 @@ pub struct Node {
 
 impl Node {
     pub fn new(tokens: &mut TokenList) -> Self {
+        Self::program(tokens)
+    }
+
+    fn program(tokens: &mut TokenList) -> Self {
+        let mut res = Node {
+            kind: NodeKind::Semi,
+            lhs: Some(Box::new(Self::stmt(tokens))),
+            rhs: None,
+        };
+        tokens.consume(Token::Reserved(";"));
+        res.rhs = if tokens.eof() {
+            None
+        } else {
+            Some(Box::new(Self::program(tokens)))
+        };
+
+        res
+    }
+
+    fn stmt(tokens: &mut TokenList) -> Self {
         Self::expr(tokens)
     }
 
     fn expr(tokens: &mut TokenList) -> Self {
-        Self::equality(tokens)
+        Self::assign(tokens)
+    }
+
+    fn assign(tokens: &mut TokenList) -> Self {
+        let mut res = Self::equality(tokens);
+        if tokens.consume(Token::Reserved("=")) {
+            res = Node {
+                kind: NodeKind::Assign,
+                lhs: Some(Box::new(res)),
+                rhs: Some(Box::new(Self::assign(tokens))),
+            }
+        }
+        res
     }
 
     fn equality(tokens: &mut TokenList) -> Self {
@@ -271,7 +306,9 @@ impl Node {
             Node {
                 kind: NodeKind::Sub,
                 lhs: Some(Box::new(Node {
-                    kind: NodeKind::Num(0),
+                    kind: NodeKind::Num {
+                        value: "0".to_string(),
+                    },
                     lhs: None,
                     rhs: None,
                 })),
@@ -283,16 +320,46 @@ impl Node {
     }
 
     fn primary(tokens: &mut TokenList) -> Self {
-        if tokens.consume(Token::Reserved("(")) {
-            let inner = Self::add(tokens);
-            tokens.expect(Token::Reserved(")"));
-            inner
-        } else {
-            Node {
-                kind: NodeKind::Num(tokens.expect_number()),
+        match tokens.get() {
+            Token::Reserved("(") => {
+                tokens.consume(Token::Reserved("("));
+                let res = Self::add(tokens);
+                tokens.expect(Token::Reserved(")"));
+                res
+            }
+            Token::Ident(id) => {
+                let id = *id;
+                tokens.consume(Token::Ident(id));
+
+                Node {
+                    kind: NodeKind::Local {
+                        offset: (id as u8 - b'a' + 1) * 8,
+                    },
+                    lhs: None,
+                    rhs: None,
+                }
+            }
+            Token::Num(_) => Node {
+                kind: NodeKind::Num {
+                    value: tokens.expect_number(),
+                },
                 lhs: None,
                 rhs: None,
-            }
+            },
+            _ => panic!("unexpected EOF"),
         }
+        // if tokens.consume(Token::Reserved("(")) {
+        //     let inner = Self::add(tokens);
+        //     tokens.expect(Token::Reserved(")"));
+        //     inner
+        // } else {
+        //     Node {
+        //         kind: NodeKind::Num {
+        //             value: tokens.expect_number(),
+        //         },
+        //         lhs: None,
+        //         rhs: None,
+        //     }
+        // }
     }
 }

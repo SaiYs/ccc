@@ -1,4 +1,7 @@
-use ccc::{parser::{TokenList, Node}, codegen::gen};
+use ccc::{
+    codegen::gen,
+    parser::{Node, TokenList},
+};
 
 fn main() {
     let mut args = std::env::args();
@@ -10,22 +13,18 @@ fn main() {
     let mut tokens = TokenList::new(source);
     let node = Node::new(&mut tokens);
 
-    println!(".intel_syntax noprefix");
-    println!(".global main");
-    println!("main:");
-
-    gen(node);
-
-    println!("    pop rax");
-    println!("    ret");
+    gen(node)
 }
 
 #[test]
 fn test_tokenize() {
-    let s = "1 + 2 >= (4 - 1)";
+    // let s = "1 + 2 >= (4 - 1)";
+    let s = "a = 4; a = a * 2; a";
     let mut tokens = TokenList::new(s.to_string());
     dbg!(&tokens);
 
     let node = Node::new(&mut tokens);
     dbg!(&node);
+
+    gen(node);
 }

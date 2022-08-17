@@ -34,4 +34,7 @@ assert 1 5==5
 assert 0 3==4
 assert 1 1+4!=1
 
+assert 11 "1 + 2; 3 + 4; 5 + 6"
+assert 4 "a = 1; a = a * 2 * 2; a"
+
 echo OK
