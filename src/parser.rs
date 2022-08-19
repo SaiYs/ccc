@@ -1,154 +1,4 @@
-use std::collections::HashMap;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Token {
-    Reserved(&'static str),
-    Ident(String),
-    Num(String),
-    EOF,
-}
-
-#[derive(Debug)]
-pub struct TokenList {
-    tokens: Vec<Token>,
-    head: usize,
-    variables: HashMap<String, usize>,
-}
-
-impl TokenList {
-    pub fn new(source: String) -> Self {
-        let mut tokens = Vec::new();
-        let source = source.chars().collect::<Vec<_>>();
-        let mut cur = 0;
-        while cur < source.len() {
-            match source[cur] {
-                // whitespace
-                ws if ws.is_ascii_whitespace() => cur += 1,
-                // integer
-                d if d.is_digit(10) => {
-                    let l = (cur..)
-                        .take_while(|&x| x < source.len() && source[x].is_digit(10))
-                        .count();
-                    let n = source[cur..cur + l].iter().collect::<String>();
-
-                    tokens.push(Token::Num(n));
-                    cur += l;
-                }
-                // identifier
-                id if id.is_ascii_lowercase() => {
-                    let l = (cur..)
-                        .take_while(|&x| x < source.len() && source[x].is_ascii_alphanumeric())
-                        .count();
-                    let id = source[cur..cur + l].iter().collect::<String>();
-                    tokens.push(Token::Ident(id));
-                    cur += l;
-                }
-                // operators
-                _ => {
-                    if source[cur..].starts_with(&['=', '=']) {
-                        tokens.push(Token::Reserved("=="));
-                        cur += 2;
-                    }
-                    if source[cur..].starts_with(&['!', '=']) {
-                        tokens.push(Token::Reserved("!="));
-                        cur += 2;
-                    }
-                    if source[cur..].starts_with(&['<', '=']) {
-                        tokens.push(Token::Reserved("<="));
-                        cur += 2;
-                    }
-                    if source[cur..].starts_with(&['>', '=']) {
-                        tokens.push(Token::Reserved(">="));
-                        cur += 2;
-                    }
-                    if source[cur..].starts_with(&['<']) {
-                        tokens.push(Token::Reserved("<"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['>']) {
-                        tokens.push(Token::Reserved(">"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['+']) {
-                        tokens.push(Token::Reserved("+"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['-']) {
-                        tokens.push(Token::Reserved("-"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['*']) {
-                        tokens.push(Token::Reserved("*"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['/']) {
-                        tokens.push(Token::Reserved("/"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['(']) {
-                        tokens.push(Token::Reserved("("));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&[')']) {
-                        tokens.push(Token::Reserved(")"));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&['=']) {
-                        tokens.push(Token::Reserved("="));
-                        cur += 1;
-                    }
-                    if source[cur..].starts_with(&[';']) {
-                        tokens.push(Token::Reserved(";"));
-                        cur += 1;
-                    }
-                }
-            }
-        }
-
-        tokens.push(Token::EOF);
-
-        TokenList {
-            tokens,
-            head: 0,
-            variables: HashMap::new(),
-        }
-    }
-
-    fn get(&self) -> &Token {
-        &self.tokens[self.head]
-    }
-
-    fn consume(&mut self, expected: &Token) -> bool {
-        let f = self.get() == expected;
-        if f {
-            self.head += 1;
-        }
-        f
-    }
-
-    fn expect(&mut self, expected: Token) -> Token {
-        match self.get() {
-            actual if actual == &expected => {
-                self.head += 1;
-                expected
-            }
-            _ => panic!("unexpected token"),
-        }
-    }
-
-    fn expect_number(&mut self) -> String {
-        let res = match self.get() {
-            Token::Num(n) => n.clone(),
-            _ => panic!("expected number but found not number"),
-        };
-        self.head += 1;
-        res
-    }
-
-    fn eof(&self) -> bool {
-        self.get() == &Token::EOF
-    }
-}
+use crate::tokenizer::{Token, Tokenizer};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Local {
@@ -170,6 +20,7 @@ pub enum NodeKind {
     Semi,
     Num { value: String },
     Local(Local),
+    Return,
 }
 
 #[derive(Debug)]
@@ -180,37 +31,52 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(tokens: &mut TokenList) -> Self {
+    pub fn new(tokens: &mut Tokenizer) -> Self {
         Self::program(tokens)
     }
 
-    fn program(tokens: &mut TokenList) -> Self {
+    fn program(tokens: &mut Tokenizer) -> Self {
         let mut res = Node {
             kind: NodeKind::Semi,
             lhs: Some(Box::new(Self::stmt(tokens))),
             rhs: None,
         };
+
         res.rhs = if tokens.eof() {
             None
         } else {
-            tokens.expect(Token::Reserved(";"));
-            Some(Box::new(Self::program(tokens)))
+            tokens.consume(&Token::Operator(";"));
+            if !tokens.eof() {
+                Some(Box::new(Self::program(tokens)))
+            } else {
+                None
+            }
         };
 
         res
     }
 
-    fn stmt(tokens: &mut TokenList) -> Self {
-        Self::expr(tokens)
+    fn stmt(tokens: &mut Tokenizer) -> Self {
+        if tokens.consume(&Token::Return) {
+            let res = Node {
+                kind: NodeKind::Return,
+                lhs: Some(Box::new(Self::expr(tokens))),
+                rhs: None,
+            };
+            tokens.expect(&Token::Operator(";"));
+            res
+        } else {
+            Self::expr(tokens)
+        }
     }
 
-    fn expr(tokens: &mut TokenList) -> Self {
+    fn expr(tokens: &mut Tokenizer) -> Self {
         Self::assign(tokens)
     }
 
-    fn assign(tokens: &mut TokenList) -> Self {
+    fn assign(tokens: &mut Tokenizer) -> Self {
         let mut res = Self::equality(tokens);
-        if tokens.consume(&Token::Reserved("=")) {
+        if tokens.consume(&Token::Operator("=")) {
             res = Node {
                 kind: NodeKind::Assign,
                 lhs: Some(Box::new(res)),
@@ -220,17 +86,17 @@ impl Node {
         res
     }
 
-    fn equality(tokens: &mut TokenList) -> Self {
+    fn equality(tokens: &mut Tokenizer) -> Self {
         let mut res = Self::relational(tokens);
 
         loop {
-            if tokens.consume(&Token::Reserved("==")) {
+            if tokens.consume(&Token::Operator("==")) {
                 res = Node {
                     kind: NodeKind::Eq,
                     lhs: Some(Box::new(res)),
                     rhs: Some(Box::new(Self::relational(tokens))),
                 }
-            } else if tokens.consume(&Token::Reserved("!=")) {
+            } else if tokens.consume(&Token::Operator("!=")) {
                 res = Node {
                     kind: NodeKind::Neq,
                     lhs: Some(Box::new(res)),
@@ -242,29 +108,29 @@ impl Node {
         }
     }
 
-    fn relational(tokens: &mut TokenList) -> Self {
+    fn relational(tokens: &mut Tokenizer) -> Self {
         let mut res = Self::add(tokens);
 
         loop {
-            if tokens.consume(&Token::Reserved("<=")) {
+            if tokens.consume(&Token::Operator("<=")) {
                 res = Node {
                     kind: NodeKind::LeEq,
                     lhs: Some(Box::new(res)),
                     rhs: Some(Box::new(Self::add(tokens))),
                 }
-            } else if tokens.consume(&Token::Reserved(">=")) {
+            } else if tokens.consume(&Token::Operator(">=")) {
                 res = Node {
                     kind: NodeKind::LeEq,
                     lhs: Some(Box::new(Self::add(tokens))),
                     rhs: Some(Box::new(res)),
                 }
-            } else if tokens.consume(&Token::Reserved("<")) {
+            } else if tokens.consume(&Token::Operator("<")) {
                 res = Node {
                     kind: NodeKind::Le,
                     lhs: Some(Box::new(res)),
                     rhs: Some(Box::new(Self::add(tokens))),
                 }
-            } else if tokens.consume(&Token::Reserved(">")) {
+            } else if tokens.consume(&Token::Operator(">")) {
                 res = Node {
                     kind: NodeKind::Le,
                     lhs: Some(Box::new(Self::add(tokens))),
@@ -276,17 +142,17 @@ impl Node {
         }
     }
 
-    fn add(tokens: &mut TokenList) -> Self {
+    fn add(tokens: &mut Tokenizer) -> Self {
         let mut res = Self::mul(tokens);
 
         loop {
-            if tokens.consume(&Token::Reserved("+")) {
+            if tokens.consume(&Token::Operator("+")) {
                 res = Node {
                     kind: NodeKind::Add,
                     lhs: Some(Box::new(res)),
                     rhs: Some(Box::new(Self::mul(tokens))),
                 };
-            } else if tokens.consume(&Token::Reserved("-")) {
+            } else if tokens.consume(&Token::Operator("-")) {
                 res = Node {
                     kind: NodeKind::Sub,
                     lhs: Some(Box::new(res)),
@@ -298,17 +164,17 @@ impl Node {
         }
     }
 
-    fn mul(tokens: &mut TokenList) -> Self {
+    fn mul(tokens: &mut Tokenizer) -> Self {
         let mut res = Self::unary(tokens);
 
         loop {
-            if tokens.consume(&Token::Reserved("*")) {
+            if tokens.consume(&Token::Operator("*")) {
                 res = Node {
                     kind: NodeKind::Mul,
                     lhs: Some(Box::new(res)),
                     rhs: Some(Box::new(Self::unary(tokens))),
                 };
-            } else if tokens.consume(&Token::Reserved("/")) {
+            } else if tokens.consume(&Token::Operator("/")) {
                 res = Node {
                     kind: NodeKind::Div,
                     lhs: Some(Box::new(res)),
@@ -320,10 +186,10 @@ impl Node {
         }
     }
 
-    fn unary(tokens: &mut TokenList) -> Self {
-        if tokens.consume(&Token::Reserved("+")) {
+    fn unary(tokens: &mut Tokenizer) -> Self {
+        if tokens.consume(&Token::Operator("+")) {
             Self::primary(tokens)
-        } else if tokens.consume(&Token::Reserved("-")) {
+        } else if tokens.consume(&Token::Operator("-")) {
             Node {
                 kind: NodeKind::Sub,
                 lhs: Some(Box::new(Node {
@@ -340,12 +206,12 @@ impl Node {
         }
     }
 
-    fn primary(tokens: &mut TokenList) -> Self {
+    fn primary(tokens: &mut Tokenizer) -> Self {
         match tokens.get().clone() {
-            Token::Reserved("(") => {
-                tokens.consume(&Token::Reserved("("));
+            Token::Operator("(") => {
+                tokens.consume(&Token::Operator("("));
                 let res = Self::add(tokens);
-                tokens.expect(Token::Reserved(")"));
+                tokens.expect(&Token::Operator(")"));
                 res
             }
             Token::Ident(id) => {
@@ -353,8 +219,6 @@ impl Node {
 
                 let l = tokens.variables.len();
                 let offset = *tokens.variables.entry(id.clone()).or_insert((l + 1) * 8);
-
-                dbg!(&id, offset);
 
                 Node {
                     kind: NodeKind::Local(Local { name: id, offset }),
@@ -369,7 +233,10 @@ impl Node {
                 lhs: None,
                 rhs: None,
             },
-            _ => panic!("unexpected EOF"),
+            Token::EOF => panic!("unexpected EOF"),
+            unknown => {
+                panic!("unexpected {:?}", unknown)
+            }
         }
     }
 }

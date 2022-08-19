@@ -18,6 +18,14 @@ pub fn gen(node: Node) {
 
 fn gen_inner(node: Node) {
     match node.kind {
+        NodeKind::Return => {
+            gen_inner(*node.lhs.unwrap());
+
+            println!("    pop rax");
+            println!("    mov rsp, rbp");
+            println!("    pop rbp");
+            println!("    ret");
+        }
         NodeKind::Semi => {
             if let Some(s) = node.lhs {
                 gen_inner(*s);
