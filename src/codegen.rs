@@ -1,4 +1,4 @@
-use crate::parser::{Node, NodeKind};
+use crate::parser::{Local, Node, NodeKind};
 
 pub fn gen(node: Node) {
     println!(".intel_syntax noprefix");
@@ -36,7 +36,7 @@ fn gen_inner(node: Node) {
             println!("    mov [rax], rdi");
             println!("    push rdi");
         }
-        NodeKind::Local { offset: _ } => {
+        NodeKind::Local(..) => {
             gen_lval(node);
             println!("    pop rax");
             println!("    mov rax, [rax]");
@@ -91,7 +91,7 @@ fn gen_inner(node: Node) {
 
 fn gen_lval(node: Node) {
     if let Node {
-        kind: NodeKind::Local { offset },
+        kind: NodeKind::Local(Local { offset, .. }),
         ..
     } = node
     {
