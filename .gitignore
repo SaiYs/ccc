@@ -3,3 +3,5 @@
 *.o
 tmp*
 a.out
+*.ll
+*.s

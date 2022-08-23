@@ -1,13 +1,8 @@
-use crate::tokenizer::{Token, Tokenizer};
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Local {
-    pub name: String,
-    pub offset: usize,
-}
+use crate::lexer::{Token, TokenKind};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeKind {
+    Program,
     Add,
     Sub,
     Mul,
@@ -17,226 +12,297 @@ pub enum NodeKind {
     Le,
     LeEq,
     Assign,
-    Semi,
-    Num { value: String },
-    Local(Local),
+    Stmt,
+    Block,
+
     Return,
+
+    Num(String),
+    Ident(String),
+}
+
+impl ToString for NodeKind {
+    fn to_string(&self) -> String {
+        match self {
+            NodeKind::Program => "PROGRAM",
+            NodeKind::Add => "ADD",
+            NodeKind::Sub => "SUB",
+            NodeKind::Mul => "MUL",
+            NodeKind::Div => "DIV",
+            NodeKind::Eq => "EQ",
+            NodeKind::Neq => "NEQ",
+            NodeKind::Le => "LE",
+            NodeKind::LeEq => "LEEQ",
+            NodeKind::Assign => "ASSIGN",
+            NodeKind::Stmt => "STMT",
+            NodeKind::Block => "BLOCK",
+            NodeKind::Return => "RETURN",
+            NodeKind::Num(_) => "NUM",
+            NodeKind::Ident(_) => "LOCAL",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Debug)]
 pub struct Node {
     pub kind: NodeKind,
-    pub lhs: Option<Box<Node>>,
-    pub rhs: Option<Box<Node>>,
+    pub children: Vec<Node>,
 }
 
 impl Node {
-    pub fn new(tokens: &mut Tokenizer) -> Self {
-        Self::program(tokens)
+    fn number(num: &str) -> Self {
+        Self {
+            kind: NodeKind::Num(num.to_string()),
+            children: vec![],
+        }
+    }
+}
+
+pub struct Parser {
+    head: usize,
+    tokens: Vec<Token>,
+}
+
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Self { head: 0, tokens }
     }
 
-    fn program(tokens: &mut Tokenizer) -> Self {
-        let mut res = Node {
-            kind: NodeKind::Semi,
-            lhs: Some(Box::new(Self::stmt(tokens))),
-            rhs: None,
-        };
-
-        res.rhs = if tokens.eof() {
-            None
-        } else {
-            tokens.consume(&Token::Operator(";"));
-            if !tokens.eof() {
-                Some(Box::new(Self::program(tokens)))
-            } else {
-                None
-            }
-        };
-
+    fn next(&mut self) -> &Token {
+        let res = self.tokens.get(self.head).expect("unexpected eof");
+        self.head += 1;
         res
     }
 
-    fn stmt(tokens: &mut Tokenizer) -> Self {
-        if tokens.consume(&Token::Return) {
+    fn eof(&mut self) -> bool {
+        self.head >= self.tokens.len()
+    }
+
+    fn consume(&mut self, target: &[TokenKind]) -> bool {
+        if self.eof() {
+            return false;
+        }
+
+        let l = target.len();
+        if (0..l).all(|i| self.tokens[self.head + i].kind == target[i]) {
+            self.head += l;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Parser {
+    pub fn parse(mut self) -> Node {
+        self.program()
+    }
+
+    fn program(&mut self) -> Node {
+        let mut res = Node {
+            kind: NodeKind::Program,
+            children: vec![],
+        };
+
+        loop {
+            if self.eof() {
+                break res;
+            } else {
+                res.children.push(self.stmt());
+            }
+        }
+    }
+
+    fn stmt(&mut self) -> Node {
+        if self.consume(&[TokenKind::Return]) {
             let res = Node {
                 kind: NodeKind::Return,
-                lhs: Some(Box::new(Self::expr(tokens))),
-                rhs: None,
+                children: vec![self.expr()],
             };
-            tokens.expect(&Token::Operator(";"));
+            self.consume(&[TokenKind::Semi]);
             res
-        } else {
-            Self::expr(tokens)
-        }
-    }
+        } else if self.consume(&[TokenKind::LBrace]) {
+            let mut res = Node {
+                kind: NodeKind::Block,
+                children: vec![],
+            };
 
-    fn expr(tokens: &mut Tokenizer) -> Self {
-        Self::assign(tokens)
-    }
-
-    fn assign(tokens: &mut Tokenizer) -> Self {
-        let mut res = Self::equality(tokens);
-        if tokens.consume(&Token::Operator("=")) {
-            res = Node {
-                kind: NodeKind::Assign,
-                lhs: Some(Box::new(res)),
-                rhs: Some(Box::new(Self::assign(tokens))),
+            loop {
+                if self.consume(&[TokenKind::RBrace]) {
+                    break res;
+                } else {
+                    res.children.push(self.stmt());
+                }
             }
+        } else {
+            let res = Node {
+                kind: NodeKind::Stmt,
+                children: vec![self.expr()],
+            };
+            self.consume(&[TokenKind::Semi]);
+            res
         }
-        res
     }
 
-    fn equality(tokens: &mut Tokenizer) -> Self {
-        let mut res = Self::relational(tokens);
+    fn expr(&mut self) -> Node {
+        self.assign()
+    }
+
+    fn assign(&mut self) -> Node {
+        let res = self.equality();
+        if self.consume(&[TokenKind::Eq]) {
+            Node {
+                kind: NodeKind::Assign,
+                children: vec![res, self.equality()],
+            }
+        } else {
+            res
+        }
+    }
+
+    fn equality(&mut self) -> Node {
+        let mut res = self.relational();
 
         loop {
-            if tokens.consume(&Token::Operator("==")) {
+            if self.consume(&[TokenKind::Eq, TokenKind::Eq]) {
                 res = Node {
                     kind: NodeKind::Eq,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::relational(tokens))),
+                    children: vec![res, self.relational()],
                 }
-            } else if tokens.consume(&Token::Operator("!=")) {
+            } else if self.consume(&[TokenKind::Bang, TokenKind::Eq]) {
                 res = Node {
                     kind: NodeKind::Neq,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::relational(tokens))),
+                    children: vec![res, self.relational()],
                 }
             } else {
-                return res;
+                break res;
             }
         }
     }
 
-    fn relational(tokens: &mut Tokenizer) -> Self {
-        let mut res = Self::add(tokens);
+    fn relational(&mut self) -> Node {
+        let mut res = self.add();
 
         loop {
-            if tokens.consume(&Token::Operator("<=")) {
+            if self.consume(&[TokenKind::Lt, TokenKind::Eq]) {
                 res = Node {
                     kind: NodeKind::LeEq,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::add(tokens))),
+                    children: vec![res, self.add()],
                 }
-            } else if tokens.consume(&Token::Operator(">=")) {
+            } else if self.consume(&[TokenKind::Gt, TokenKind::Eq]) {
                 res = Node {
                     kind: NodeKind::LeEq,
-                    lhs: Some(Box::new(Self::add(tokens))),
-                    rhs: Some(Box::new(res)),
+                    children: vec![self.add(), res],
                 }
-            } else if tokens.consume(&Token::Operator("<")) {
+            } else if self.consume(&[TokenKind::Lt]) {
                 res = Node {
                     kind: NodeKind::Le,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::add(tokens))),
+                    children: vec![res, self.add()],
                 }
-            } else if tokens.consume(&Token::Operator(">")) {
+            } else if self.consume(&[TokenKind::Gt]) {
                 res = Node {
                     kind: NodeKind::Le,
-                    lhs: Some(Box::new(Self::add(tokens))),
-                    rhs: Some(Box::new(res)),
+                    children: vec![self.add(), res],
                 }
             } else {
-                return res;
+                break res;
             }
         }
     }
 
-    fn add(tokens: &mut Tokenizer) -> Self {
-        let mut res = Self::mul(tokens);
+    fn add(&mut self) -> Node {
+        let mut res = self.mul();
 
         loop {
-            if tokens.consume(&Token::Operator("+")) {
+            if self.consume(&[TokenKind::Plus]) {
                 res = Node {
                     kind: NodeKind::Add,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::mul(tokens))),
+                    children: vec![res, self.mul()],
                 };
-            } else if tokens.consume(&Token::Operator("-")) {
+            } else if self.consume(&[TokenKind::Minus]) {
                 res = Node {
                     kind: NodeKind::Sub,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::mul(tokens))),
+                    children: vec![res, self.mul()],
                 };
             } else {
-                return res;
+                break res;
             }
         }
     }
 
-    fn mul(tokens: &mut Tokenizer) -> Self {
-        let mut res = Self::unary(tokens);
+    fn mul(&mut self) -> Node {
+        let mut res = self.unary();
 
         loop {
-            if tokens.consume(&Token::Operator("*")) {
+            if self.consume(&[TokenKind::Star]) {
                 res = Node {
                     kind: NodeKind::Mul,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::unary(tokens))),
+                    children: vec![res, self.unary()],
                 };
-            } else if tokens.consume(&Token::Operator("/")) {
+            } else if self.consume(&[TokenKind::Slash]) {
                 res = Node {
                     kind: NodeKind::Div,
-                    lhs: Some(Box::new(res)),
-                    rhs: Some(Box::new(Self::unary(tokens))),
+                    children: vec![res, self.unary()],
                 };
             } else {
-                return res;
+                break res;
             }
         }
     }
 
-    fn unary(tokens: &mut Tokenizer) -> Self {
-        if tokens.consume(&Token::Operator("+")) {
-            Self::primary(tokens)
-        } else if tokens.consume(&Token::Operator("-")) {
+    fn unary(&mut self) -> Node {
+        if self.consume(&[TokenKind::Minus]) {
             Node {
                 kind: NodeKind::Sub,
-                lhs: Some(Box::new(Node {
-                    kind: NodeKind::Num {
-                        value: "0".to_string(),
-                    },
-                    lhs: None,
-                    rhs: None,
-                })),
-                rhs: Some(Box::new(Self::primary(tokens))),
+                children: vec![Node::number("0"), self.primary()],
             }
         } else {
-            Self::primary(tokens)
+            self.primary()
         }
     }
 
-    fn primary(tokens: &mut Tokenizer) -> Self {
-        match tokens.get().clone() {
-            Token::Operator("(") => {
-                tokens.consume(&Token::Operator("("));
-                let res = Self::add(tokens);
-                tokens.expect(&Token::Operator(")"));
+    fn primary(&mut self) -> Node {
+        match self.next() {
+            Token {
+                kind: TokenKind::LParen,
+                ..
+            } => {
+                let res = self.add();
+                assert_eq!(self.next().kind, TokenKind::RParen);
                 res
             }
-            Token::Ident(id) => {
-                tokens.consume(&Token::Ident(id.clone()));
-
-                let l = tokens.variables.len();
-                let offset = *tokens.variables.entry(id.clone()).or_insert((l + 1) * 8);
-
-                Node {
-                    kind: NodeKind::Local(Local { name: id, offset }),
-                    lhs: None,
-                    rhs: None,
-                }
-            }
-            Token::Num(_) => Node {
-                kind: NodeKind::Num {
-                    value: tokens.expect_number(),
-                },
-                lhs: None,
-                rhs: None,
+            Token {
+                kind: TokenKind::Ident,
+                value: id,
+                ..
+            } => Node {
+                kind: NodeKind::Ident(id.clone().unwrap()),
+                children: vec![],
             },
-            Token::EOF => panic!("unexpected EOF"),
+            Token {
+                kind: TokenKind::Num,
+                value: num,
+                ..
+            } => Node {
+                kind: NodeKind::Num(num.clone().unwrap()),
+                children: vec![],
+            },
             unknown => {
                 panic!("unexpected {:?}", unknown)
             }
         }
     }
+}
+
+// impl Node {
+// }
+
+#[test]
+fn feature() {
+    let tokens = crate::lexer::tokenize("a=1; b=2; c=3;");
+    dbg!(&tokens);
+
+    let parser = Parser::new(tokens);
+    dbg!(parser.parse());
 }

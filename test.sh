@@ -41,4 +41,12 @@ assert 8 "foo = 2; bar = 3; bar = 4; foo * bar"
 assert 1 "res = 1; return 1;"
 assert 1 "res = 1; return 1; return 0; return 2;"
 
+assert 12 "a = 1;
+{
+    b = 3;
+    c = a + b;
+}
+ans = b * c;
+return ans;"
+
 echo OK
