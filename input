@@ -1,7 +1,0 @@
-a = 1;
-{
-    b = 1;
-    c = a + b;
-}
-ans = a * b;
-return ans;

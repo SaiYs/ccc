@@ -3,6 +3,21 @@ use crate::lexer::{Token, TokenKind};
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeKind {
     Program,
+
+    Assign,
+    Stmt,
+    Block,
+    If,
+    Return,
+
+    BinOp(BinOp),
+
+    Num(String),
+    Ident(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BinOp {
     Add,
     Sub,
     Mul,
@@ -11,34 +26,19 @@ pub enum NodeKind {
     Neq,
     Le,
     LeEq,
-    Assign,
-    Stmt,
-    Block,
-
-    Return,
-
-    Num(String),
-    Ident(String),
 }
 
-impl ToString for NodeKind {
+impl ToString for BinOp {
     fn to_string(&self) -> String {
         match self {
-            NodeKind::Program => "PROGRAM",
-            NodeKind::Add => "ADD",
-            NodeKind::Sub => "SUB",
-            NodeKind::Mul => "MUL",
-            NodeKind::Div => "DIV",
-            NodeKind::Eq => "EQ",
-            NodeKind::Neq => "NEQ",
-            NodeKind::Le => "LE",
-            NodeKind::LeEq => "LEEQ",
-            NodeKind::Assign => "ASSIGN",
-            NodeKind::Stmt => "STMT",
-            NodeKind::Block => "BLOCK",
-            NodeKind::Return => "RETURN",
-            NodeKind::Num(_) => "NUM",
-            NodeKind::Ident(_) => "LOCAL",
+            BinOp::Add => "ADD",
+            BinOp::Sub => "SUB",
+            BinOp::Mul => "MUL",
+            BinOp::Div => "DIV",
+            BinOp::Eq => "EQ",
+            BinOp::Neq => "NEQ",
+            BinOp::Le => "LE",
+            BinOp::LeEq => "LEEQ",
         }
         .to_string()
     }
@@ -75,12 +75,17 @@ impl Parser {
         res
     }
 
-    fn eof(&mut self) -> bool {
+    fn peek(&self) -> &Token {
+        let res = self.tokens.get(self.head).expect("unexpected eof");
+        res
+    }
+
+    fn is_eof(&mut self) -> bool {
         self.head >= self.tokens.len()
     }
 
     fn consume(&mut self, target: &[TokenKind]) -> bool {
-        if self.eof() {
+        if self.is_eof() {
             return false;
         }
 
@@ -106,7 +111,7 @@ impl Parser {
         };
 
         loop {
-            if self.eof() {
+            if self.is_eof() {
                 break res;
             } else {
                 res.children.push(self.stmt());
@@ -120,21 +125,10 @@ impl Parser {
                 kind: NodeKind::Return,
                 children: vec![self.expr()],
             };
-            self.consume(&[TokenKind::Semi]);
+            assert!(self.consume(&[TokenKind::Semi]));
             res
-        } else if self.consume(&[TokenKind::LBrace]) {
-            let mut res = Node {
-                kind: NodeKind::Block,
-                children: vec![],
-            };
-
-            loop {
-                if self.consume(&[TokenKind::RBrace]) {
-                    break res;
-                } else {
-                    res.children.push(self.stmt());
-                }
-            }
+        } else if self.peek().kind == TokenKind::LBrace {
+            self.block()
         } else {
             let res = Node {
                 kind: NodeKind::Stmt,
@@ -146,7 +140,48 @@ impl Parser {
     }
 
     fn expr(&mut self) -> Node {
-        self.assign()
+        if self.peek().kind == TokenKind::If {
+            self.ifelse()
+        } else if self.peek().kind == TokenKind::LBrace {
+            self.block()
+        } else {
+            self.assign()
+        }
+    }
+
+    fn block(&mut self) -> Node {
+        self.consume(&[TokenKind::LBrace]);
+
+        let mut res = Node {
+            kind: NodeKind::Block,
+            children: vec![],
+        };
+
+        loop {
+            if self.consume(&[TokenKind::RBrace]) {
+                break res;
+            } else {
+                res.children.push(self.stmt());
+            }
+        }
+    }
+
+    fn ifelse(&mut self) -> Node {
+        self.consume(&[TokenKind::If]);
+        let mut res = Node {
+            kind: NodeKind::If,
+            children: vec![self.expr(), self.block()],
+        };
+
+        if self.consume(&[TokenKind::Else]) {
+            res.children.push(if self.peek().kind == TokenKind::If {
+                self.ifelse()
+            } else {
+                self.block()
+            });
+        }
+
+        res
     }
 
     fn assign(&mut self) -> Node {
@@ -154,7 +189,7 @@ impl Parser {
         if self.consume(&[TokenKind::Eq]) {
             Node {
                 kind: NodeKind::Assign,
-                children: vec![res, self.equality()],
+                children: vec![res, self.expr()],
             }
         } else {
             res
@@ -167,12 +202,12 @@ impl Parser {
         loop {
             if self.consume(&[TokenKind::Eq, TokenKind::Eq]) {
                 res = Node {
-                    kind: NodeKind::Eq,
+                    kind: NodeKind::BinOp(BinOp::Eq),
                     children: vec![res, self.relational()],
                 }
             } else if self.consume(&[TokenKind::Bang, TokenKind::Eq]) {
                 res = Node {
-                    kind: NodeKind::Neq,
+                    kind: NodeKind::BinOp(BinOp::Neq),
                     children: vec![res, self.relational()],
                 }
             } else {
@@ -187,22 +222,22 @@ impl Parser {
         loop {
             if self.consume(&[TokenKind::Lt, TokenKind::Eq]) {
                 res = Node {
-                    kind: NodeKind::LeEq,
+                    kind: NodeKind::BinOp(BinOp::LeEq),
                     children: vec![res, self.add()],
                 }
             } else if self.consume(&[TokenKind::Gt, TokenKind::Eq]) {
                 res = Node {
-                    kind: NodeKind::LeEq,
+                    kind: NodeKind::BinOp(BinOp::LeEq),
                     children: vec![self.add(), res],
                 }
             } else if self.consume(&[TokenKind::Lt]) {
                 res = Node {
-                    kind: NodeKind::Le,
+                    kind: NodeKind::BinOp(BinOp::Le),
                     children: vec![res, self.add()],
                 }
             } else if self.consume(&[TokenKind::Gt]) {
                 res = Node {
-                    kind: NodeKind::Le,
+                    kind: NodeKind::BinOp(BinOp::Le),
                     children: vec![self.add(), res],
                 }
             } else {
@@ -217,12 +252,12 @@ impl Parser {
         loop {
             if self.consume(&[TokenKind::Plus]) {
                 res = Node {
-                    kind: NodeKind::Add,
+                    kind: NodeKind::BinOp(BinOp::Add),
                     children: vec![res, self.mul()],
                 };
             } else if self.consume(&[TokenKind::Minus]) {
                 res = Node {
-                    kind: NodeKind::Sub,
+                    kind: NodeKind::BinOp(BinOp::Sub),
                     children: vec![res, self.mul()],
                 };
             } else {
@@ -237,12 +272,12 @@ impl Parser {
         loop {
             if self.consume(&[TokenKind::Star]) {
                 res = Node {
-                    kind: NodeKind::Mul,
+                    kind: NodeKind::BinOp(BinOp::Mul),
                     children: vec![res, self.unary()],
                 };
             } else if self.consume(&[TokenKind::Slash]) {
                 res = Node {
-                    kind: NodeKind::Div,
+                    kind: NodeKind::BinOp(BinOp::Div),
                     children: vec![res, self.unary()],
                 };
             } else {
@@ -254,7 +289,7 @@ impl Parser {
     fn unary(&mut self) -> Node {
         if self.consume(&[TokenKind::Minus]) {
             Node {
-                kind: NodeKind::Sub,
+                kind: NodeKind::BinOp(BinOp::Sub),
                 children: vec![Node::number("0"), self.primary()],
             }
         } else {

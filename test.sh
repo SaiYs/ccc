@@ -38,15 +38,48 @@ assert 11 "1 + 2; 3 + 4; 5 + 6"
 assert 4 "a = 1; a = a * 2 * 2; a"
 assert 10 "a = 3; b = 7; a + b"
 assert 8 "foo = 2; bar = 3; bar = 4; foo * bar"
+
 assert 1 "res = 1; return 1;"
 assert 1 "res = 1; return 1; return 0; return 2;"
 
-assert 12 "a = 1;
+assert 12 "
+a = 1;
 {
     b = 3;
     c = a + b;
 }
 ans = b * c;
 return ans;"
+
+assert 6 "
+a = 1;
+if 1 {
+  a = a * 3;
+  if 1 {
+    a = a * 2;
+    if 0 {
+      a = 0;
+    }
+  }
+}
+return a;
+"
+
+assert 3 "
+f = 3;
+a = if f == 1 {
+  1
+} else {
+  3
+};
+return a;
+"
+
+assert 1 "
+{
+  return 1;
+}
+return 2;
+"
 
 echo OK

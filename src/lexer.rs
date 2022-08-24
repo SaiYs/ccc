@@ -150,7 +150,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
     .collect()
 }
 
-pub(crate) const EOF_CHAR: char = '\0';
+const EOF_CHAR: char = '\0';
 
 struct Cursor<'a> {
     pos: usize,
@@ -429,11 +429,4 @@ impl<'a> Cursor<'a> {
             unknown => panic!("unexpected {:?} at {}", unknown, self.pos),
         }
     }
-}
-
-#[test]
-fn test_tokenize() {
-    let source = "foo = 1; { foo2 = 1; } a + b + 1";
-    let tokens = tokenize(source);
-    dbg!(tokens);
 }

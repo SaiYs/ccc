@@ -9,6 +9,6 @@ fn main() {
     let parser = Parser::new(tokens);
     let ast = parser.parse();
 
-    let mut generater = Generater::new();
+    let mut generater = Generater::new(std::io::stdout());
     generater.gen(&ast);
 }

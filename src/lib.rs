@@ -4,7 +4,7 @@ pub mod parser;
 
 #[test]
 fn test() {
-    let s = include_str!("../input");
+    let s = include_str!("../input.txt");
     let tokens = lexer::tokenize(s);
     dbg!(&tokens);
 
@@ -12,6 +12,6 @@ fn test() {
     let ast = parser.parse();
     dbg!(&ast);
 
-    let mut generater = codegen::Generater::new();
+    let mut generater = codegen::Generater::new(std::io::stdout());
     generater.gen(&ast);
 }
