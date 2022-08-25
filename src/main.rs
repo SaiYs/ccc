@@ -10,5 +10,5 @@ fn main() {
     let ast = parser.parse();
 
     let mut generater = Generater::new(std::io::stdout());
-    generater.gen(&ast);
+    generater.gen(&ast, 256);
 }

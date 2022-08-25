@@ -7,6 +7,7 @@ pub enum NodeKind {
     Assign,
     Stmt,
     Block,
+    Loop,
     If,
     Return,
 
@@ -14,6 +15,7 @@ pub enum NodeKind {
 
     Num(String),
     Ident(String),
+    FuncCall(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -119,6 +121,23 @@ impl Parser {
         }
     }
 
+    fn block(&mut self) -> Node {
+        self.consume(&[TokenKind::LBrace]);
+
+        let mut res = Node {
+            kind: NodeKind::Block,
+            children: vec![],
+        };
+
+        loop {
+            if self.consume(&[TokenKind::RBrace]) {
+                break res;
+            } else {
+                res.children.push(self.stmt());
+            }
+        }
+    }
+
     fn stmt(&mut self) -> Node {
         if self.consume(&[TokenKind::Return]) {
             let res = Node {
@@ -127,6 +146,11 @@ impl Parser {
             };
             assert!(self.consume(&[TokenKind::Semi]));
             res
+        } else if self.consume(&[TokenKind::Loop]) {
+            Node {
+                kind: NodeKind::Loop,
+                children: vec![self.block()],
+            }
         } else if self.peek().kind == TokenKind::LBrace {
             self.block()
         } else {
@@ -146,23 +170,6 @@ impl Parser {
             self.block()
         } else {
             self.assign()
-        }
-    }
-
-    fn block(&mut self) -> Node {
-        self.consume(&[TokenKind::LBrace]);
-
-        let mut res = Node {
-            kind: NodeKind::Block,
-            children: vec![],
-        };
-
-        loop {
-            if self.consume(&[TokenKind::RBrace]) {
-                break res;
-            } else {
-                res.children.push(self.stmt());
-            }
         }
     }
 
@@ -298,35 +305,72 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Node {
-        match self.next() {
-            Token {
-                kind: TokenKind::LParen,
-                ..
-            } => {
-                let res = self.add();
-                assert_eq!(self.next().kind, TokenKind::RParen);
-                res
+        if self.consume(&[TokenKind::LParen]) {
+            let res = self.add();
+            assert_eq!(self.next().kind, TokenKind::RParen);
+            res
+        } else if self.peek().kind == TokenKind::Ident {
+            let id = self.next().value.clone().unwrap();
+            if self.consume(&[TokenKind::LParen, TokenKind::RParen]) {
+                Node {
+                    kind: NodeKind::FuncCall(id),
+                    children: vec![], // args
+                }
+            } else {
+                Node {
+                    kind: NodeKind::Ident(id),
+                    children: vec![],
+                }
             }
-            Token {
-                kind: TokenKind::Ident,
-                value: id,
-                ..
-            } => Node {
-                kind: NodeKind::Ident(id.clone().unwrap()),
+        } else if self.peek().kind == TokenKind::Num {
+            let num = self.next().value.clone().unwrap();
+            Node {
+                kind: NodeKind::Num(num),
                 children: vec![],
-            },
-            Token {
-                kind: TokenKind::Num,
-                value: num,
-                ..
-            } => Node {
-                kind: NodeKind::Num(num.clone().unwrap()),
-                children: vec![],
-            },
-            unknown => {
-                panic!("unexpected {:?}", unknown)
             }
+        } else {
+            panic!("unexpected {:?}", self.peek())
         }
+        // match self.next() {
+        //     Token {
+        //         kind: TokenKind::LParen,
+        //         ..
+        //     } => {
+        //         let res = self.add();
+        //         assert_eq!(self.next().kind, TokenKind::RParen);
+        //         res
+        //     }
+        //     Token {
+        //         kind: TokenKind::Ident,
+        //         value: id,
+        //         ..
+        //     } => {
+        //         if self.consume(&[TokenKind::LParen, TokenKind::RParen]) {
+        //             // function call
+        //             Node {
+        //                 kind: NodeKind::FuncCall(id.clone().unwrap()),
+        //                 children: vec![], // args
+        //             }
+        //         } else {
+        //             // variable
+        //             Node {
+        //                 kind: NodeKind::Ident(id.clone().unwrap()),
+        //                 children: vec![],
+        //             }
+        //         }
+        //     }
+        //     Token {
+        //         kind: TokenKind::Num,
+        //         value: num,
+        //         ..
+        //     } => Node {
+        //         kind: NodeKind::Num(num.clone().unwrap()),
+        //         children: vec![],
+        //     },
+        //     unknown => {
+        //         panic!("unexpected {:?}", unknown)
+        //     }
+        // }
     }
 }
 

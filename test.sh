@@ -4,7 +4,7 @@ assert() {
   input="$2"
 
   cargo run -q -- "$input" > tmp.s
-  cc -o tmp tmp.s
+  gcc -o tmp tmp.s
   ./tmp
   actual="$?"
 
@@ -65,21 +65,31 @@ if 1 {
 return a;
 "
 
-assert 3 "
-f = 3;
-a = if f == 1 {
-  1
-} else {
-  3
-};
-return a;
-"
+# assert 3 "
+# f = 3;
+# a = if f == 1 {
+#   1
+# } else {
+#   3
+# };
+# return a;
+# "
 
 assert 1 "
 {
   return 1;
 }
 return 2;
+"
+
+assert 10 "
+a = 0;
+loop {
+  a = a + 1;
+  if a == 10 {
+    return a;
+  }
+}
 "
 
 echo OK

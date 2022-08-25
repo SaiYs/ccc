@@ -49,6 +49,7 @@ pub enum TokenKind {
     Dot,
 
     // keywords
+    Fn,
     If,
     Else,
     For,
@@ -92,6 +93,7 @@ impl ToString for TokenKind {
             TokenKind::Comma => ",",
             TokenKind::Dot => ".",
 
+            TokenKind::Fn => "fn",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -123,15 +125,15 @@ fn is_id_body(c: char) -> bool {
 }
 
 fn is_keyword(id: &str) -> bool {
-    matches!(id, "if" | "else" | "for" | "while" | "return")
+    matches!(id, "fn" | "if" | "else" | "loop" | "return")
 }
 
 fn to_keyword(id: &str) -> Option<TokenKind> {
     match id {
+        "fn" => Some(TokenKind::Fn),
         "if" => Some(TokenKind::If),
         "else" => Some(TokenKind::Else),
-        "for" => Some(TokenKind::For),
-        "while" => Some(TokenKind::While),
+        "loop" => Some(TokenKind::Loop),
         "return" => Some(TokenKind::Return),
         _ => None,
     }
