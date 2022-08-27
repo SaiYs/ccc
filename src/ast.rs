@@ -116,4 +116,3 @@ pub struct Local {
 pub struct Number {
     pub value: String,
 }
-
