@@ -79,7 +79,7 @@ fn main() {
   a = 1;
   b = 2;
   c = 3;
-  return sum(a + b + c);
+  return sum(a, b, c);
 }
 "
 
@@ -105,6 +105,32 @@ fn main() {
   foo = 100;
   a = 1;
   return sum(a, a, a);
+}
+"
+
+assert 2 "
+fn main() {
+  a = 1;
+  {
+    b = 2;
+  }
+  return b;
+}
+"
+
+# fib = 1, 1, 2, 3, 5, 8, 13, ..
+assert 13 "
+fn fib(n) {
+  if n <= 1 {
+    1
+  } else {
+    fib(n - 1) + fib(n - 2)
+  }
+}
+
+fn main() {
+  a = fib(6);
+  return a;
 }
 "
 

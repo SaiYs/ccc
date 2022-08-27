@@ -1,10 +1,12 @@
-fn sum(a, b, c) {
-  return a + b + c;
+fn fib(n) {
+  if n <= 2 {
+    1
+  } else {
+    fib(n - 1) + fib(n - 2)
+  }
 }
 
 fn main() {
-  a = 1;
-  b = 2;
-  c = 3;
-  return sum(a, b, c);
+  a = fib(5);
+  return a;
 }

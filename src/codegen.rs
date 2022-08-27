@@ -8,6 +8,7 @@ use crate::ast::{
     Number, Return, Stmt, UnOp,
 };
 
+const STACK_SIZE: usize = 8 * 256;
 const ARG_REGS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 #[derive(Debug)]
@@ -49,8 +50,6 @@ impl<W: Write> Generater<W> {
     }
 
     fn gen_fn(&mut self, f: &FnDef) {
-        const STACK_SIZE: usize = 8 * 256;
-
         // stack_size should be a multiple of 16;
         let stack_size = if f.name == "main" {
             STACK_SIZE
