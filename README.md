@@ -1,2 +1,4 @@
-# [低レイヤを知りたい人のためのCコンパイラ作成入門](https://www.sigbus.info/compilerbook#index72) in Rust
+# Sofa Language
+
+reference: [低レイヤを知りたい人のためのCコンパイラ作成入門](https://www.sigbus.info/compilerbook#index72)
 

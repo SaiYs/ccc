@@ -1,4 +1,4 @@
-use ccc::{codegen::Generater, lexer::tokenize, parser::Parser};
+use sofa::{codegen::Generater, lexer::tokenize, parser::Parser};
 
 fn main() {
     let mut args = std::env::args();
