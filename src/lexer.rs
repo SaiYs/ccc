@@ -10,7 +10,7 @@ pub enum TokenKind {
     /// /
     Slash,
     /// %
-    Percent,
+    // Percent,
     /// &
     And,
     /// |
@@ -52,8 +52,8 @@ pub enum TokenKind {
     Fn,
     If,
     Else,
-    For,
-    While,
+    // For,
+    // While,
     Loop,
     Return,
 
@@ -73,7 +73,7 @@ impl ToString for TokenKind {
             TokenKind::Minus => "-",
             TokenKind::Star => "*",
             TokenKind::Slash => "/",
-            TokenKind::Percent => "%",
+            // TokenKind::Percent => "%",
             TokenKind::And => "&",
             TokenKind::Or => "|",
             TokenKind::Caret => "^",
@@ -96,8 +96,8 @@ impl ToString for TokenKind {
             TokenKind::Fn => "fn",
             TokenKind::If => "if",
             TokenKind::Else => "else",
-            TokenKind::For => "for",
-            TokenKind::While => "while",
+            // TokenKind::For => "for",
+            // TokenKind::While => "while",
             TokenKind::Loop => "loop",
             TokenKind::Return => "return",
 

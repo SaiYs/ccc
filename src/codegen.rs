@@ -270,8 +270,8 @@ impl<W: Write> SofaGenerater<W> {
                         writeln!(self.writer, "    pop rax").unwrap();
                         writeln!(self.writer, "    neg rax").unwrap();
                     }
-                    crate::ast::UnOpKind::Ref => todo!(),
-                    crate::ast::UnOpKind::Deref => todo!(),
+                    // crate::ast::UnOpKind::Ref => todo!(),
+                    // crate::ast::UnOpKind::Deref => todo!(),
                 }
                 writeln!(self.writer, "    push rax").unwrap();
             }

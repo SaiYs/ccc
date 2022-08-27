@@ -1,7 +1,11 @@
+mod ast;
+mod codegen;
+mod lexer;
+mod parser;
+
 use std::{fs::File, io::Read};
 
 use clap::Parser;
-use sofa::{codegen::SofaGenerater, lexer::tokenize, parser::SofaParser};
 
 #[derive(Debug, clap::Parser)]
 #[clap(author, version, about)]
@@ -39,19 +43,19 @@ fn main() {
         .unwrap();
 
     // tokenize source into tokens
-    let tokens = tokenize(&source);
+    let tokens = lexer::tokenize(&source);
 
     // parse tokens
-    let parser = SofaParser::new(&tokens);
+    let parser = parser::SofaParser::new(&tokens);
     let ast = parser.parse();
 
     // generate assembly
     if args.stdout {
-        let mut generater = SofaGenerater::default();
+        let mut generater = codegen::SofaGenerater::default();
         generater.gen(&ast);
     } else {
         let out = args.out.unwrap_or_else(|| "tmp.s".to_string());
-        let mut generater = SofaGenerater::new(
+        let mut generater = codegen::SofaGenerater::new(
             std::fs::File::options()
                 .write(true)
                 .truncate(true)
@@ -61,4 +65,18 @@ fn main() {
         );
         generater.gen(&ast);
     }
+}
+
+#[test]
+fn test_example() {
+    let s = include_str!("../example.sofa");
+    let tokens = lexer::tokenize(s);
+    dbg!(&tokens);
+
+    let parser = parser::SofaParser::new(&tokens);
+    let ast = parser.parse();
+    dbg!(&ast);
+
+    let mut generater = codegen::SofaGenerater::new(std::io::stdout());
+    generater.gen(&ast);
 }
