@@ -5,3 +5,4 @@ tmp*
 a.out
 *.ll
 *.s
+# input.sofa

@@ -13,14 +13,14 @@ pub mod parser;
 
 #[test]
 fn test() {
-    let s = include_str!("../input.txt");
+    let s = include_str!("../input.sofa");
     let tokens = lexer::tokenize(s);
     dbg!(&tokens);
 
-    let parser = parser::Parser::new(&tokens);
+    let parser = parser::SofaParser::new(&tokens);
     let ast = parser.parse();
     dbg!(&ast);
 
-    let mut generater = codegen::Generater::new(std::io::stdout());
+    let mut generater = codegen::SofaGenerater::new(std::io::stdout());
     generater.gen(&ast);
 }

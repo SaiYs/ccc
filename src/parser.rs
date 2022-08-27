@@ -6,12 +6,12 @@ use crate::{
     lexer::{Token, TokenKind},
 };
 
-pub struct Parser<'ctx> {
+pub struct SofaParser<'ctx> {
     head: usize,
     tokens: &'ctx [Token],
 }
 
-impl<'ctx> Parser<'ctx> {
+impl<'ctx> SofaParser<'ctx> {
     pub fn new(tokens: &'ctx [Token]) -> Self {
         Self { head: 0, tokens }
     }
@@ -88,7 +88,7 @@ impl<'ctx> Parser<'ctx> {
     }
 }
 
-impl<'ctx> Parser<'ctx> {
+impl<'ctx> SofaParser<'ctx> {
     pub fn parse(mut self) -> Ast {
         Ast {
             node: self.global(),

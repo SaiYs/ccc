@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufWriter, Write},
+    io::{BufWriter, Stdout, Write},
 };
 
 use crate::ast::{
@@ -12,13 +12,23 @@ const STACK_SIZE: usize = 8 * 256;
 const ARG_REGS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 #[derive(Debug)]
-pub struct Generater<W: Write> {
+pub struct SofaGenerater<W: Write> {
     writer: BufWriter<W>,
     local: HashMap<String, usize>,
     label_id: usize,
 }
 
-impl<W: Write> Generater<W> {
+impl Default for SofaGenerater<Stdout> {
+    fn default() -> Self {
+        Self {
+            writer: BufWriter::new(std::io::stdout()),
+            local: HashMap::new(),
+            label_id: 0,
+        }
+    }
+}
+
+impl<W: Write> SofaGenerater<W> {
     pub fn new(writer: W) -> Self {
         Self {
             writer: BufWriter::new(writer),

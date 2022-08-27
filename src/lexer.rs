@@ -285,10 +285,22 @@ impl<'a> Cursor<'a> {
             }
             '/' => {
                 self.bump();
-                Token {
-                    kind: TokenKind::Slash,
-                    value: None,
-                    pos: self.update_pos(),
+                if self.first() == '/' {
+                    while self.first() != '\n' {
+                        self.bump();
+                    }
+                    self.bump();
+                    Token {
+                        kind: TokenKind::Whitespace,
+                        value: None,
+                        pos: self.update_pos(),
+                    }
+                } else {
+                    Token {
+                        kind: TokenKind::Slash,
+                        value: None,
+                        pos: self.update_pos(),
+                    }
                 }
             }
             '&' => {
