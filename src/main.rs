@@ -6,9 +6,9 @@ fn main() {
 
     let tokens = tokenize(&source);
 
-    let parser = Parser::new(tokens);
+    let parser = Parser::new(&tokens);
     let ast = parser.parse();
 
     let mut generater = Generater::new(std::io::stdout());
-    generater.gen(&ast, 256);
+    generater.gen(&ast);
 }

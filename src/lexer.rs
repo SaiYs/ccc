@@ -60,7 +60,7 @@ pub enum TokenKind {
     /// identifier
     Ident,
     /// number literal
-    Num,
+    Number,
     /// whitespace
     Whitespace,
     // EOF,
@@ -102,7 +102,7 @@ impl ToString for TokenKind {
             TokenKind::Return => "return",
 
             TokenKind::Ident => "ident",
-            TokenKind::Num => "number",
+            TokenKind::Number => "number",
             TokenKind::Whitespace => "",
         }
         .to_string()
@@ -244,7 +244,7 @@ impl<'a> Cursor<'a> {
                     .unwrap();
                 self.consume(&num);
                 Token {
-                    kind: TokenKind::Num,
+                    kind: TokenKind::Number,
                     value: Some(num),
                     pos: self.update_pos(),
                 }
