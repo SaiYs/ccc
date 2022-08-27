@@ -116,11 +116,11 @@ pub struct Token {
     pub pos: (usize, usize),
 }
 
-fn is_id_head(c: char) -> bool {
+fn is_id_head(c: &char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '_')
 }
 
-fn is_id_body(c: char) -> bool {
+fn is_id_body(c: &char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
 }
 
@@ -157,12 +157,12 @@ const EOF_CHAR: char = '\0';
 struct Cursor<'a> {
     pos: usize,
     last: usize,
-    chars: std::str::Chars<'a>,
+    chars: std::iter::Peekable<std::str::Chars<'a>>,
 }
 
 impl<'a> Cursor<'a> {
     fn new(source: &'a str) -> Self {
-        let chars = source.chars();
+        let chars = source.chars().peekable();
         Self {
             pos: 0,
             last: 0,
@@ -176,8 +176,8 @@ impl<'a> Cursor<'a> {
         res
     }
 
-    fn first(&self) -> char {
-        self.chars.clone().next().unwrap_or(EOF_CHAR)
+    fn first(&mut self) -> &char {
+        self.chars.peek().unwrap_or(&EOF_CHAR)
     }
 
     fn bump(&mut self) -> Option<char> {
@@ -192,11 +192,12 @@ impl<'a> Cursor<'a> {
         debug_assert!(consumed == target)
     }
 
-    fn is_eof(&self) -> bool {
-        self.chars.as_str().is_empty()
+    fn is_eof(&mut self) -> bool {
+        self.chars.peek().is_none()
     }
 
     fn token(&mut self) -> Token {
+        let current_pos = self.pos;
         match self.first() {
             whitespace if whitespace.is_ascii_whitespace() => {
                 while self.first().is_ascii_whitespace() {
@@ -214,7 +215,7 @@ impl<'a> Cursor<'a> {
                 let id = self
                     .chars
                     .clone()
-                    .take_while(|&x| is_id_body(x))
+                    .take_while(is_id_body)
                     .collect::<String>();
                 self.consume(&id);
 
@@ -285,8 +286,8 @@ impl<'a> Cursor<'a> {
             }
             '/' => {
                 self.bump();
-                if self.first() == '/' {
-                    while self.first() != '\n' {
+                if self.first() == &'/' {
+                    while self.first() != &'\n' {
                         self.bump();
                     }
                     self.bump();
@@ -440,7 +441,7 @@ impl<'a> Cursor<'a> {
                 }
             }
 
-            unknown => panic!("unexpected {:?} at {}", unknown, self.pos),
+            unknown => panic!("unexpected {:?} at {}", unknown, current_pos),
         }
     }
 }
