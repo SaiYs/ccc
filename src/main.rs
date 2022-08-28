@@ -69,7 +69,7 @@ fn main() {
 
 #[test]
 fn test_example() {
-    let s = include_str!("../example.sofa");
+    let s = include_str!("../example/test.sofa");
     let tokens = lexer::tokenize(s);
     dbg!(&tokens);
 
