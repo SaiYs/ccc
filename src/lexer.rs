@@ -50,6 +50,7 @@ pub enum TokenKind {
 
     // keywords
     Fn,
+    Let,
     If,
     Else,
     // For,
@@ -64,49 +65,6 @@ pub enum TokenKind {
     /// whitespace
     Whitespace,
     // EOF,
-}
-
-impl ToString for TokenKind {
-    fn to_string(&self) -> String {
-        match self {
-            TokenKind::Plus => "+",
-            TokenKind::Minus => "-",
-            TokenKind::Star => "*",
-            TokenKind::Slash => "/",
-            // TokenKind::Percent => "%",
-            TokenKind::And => "&",
-            TokenKind::Or => "|",
-            TokenKind::Caret => "^",
-            TokenKind::Lt => "<",
-            TokenKind::Gt => ">",
-            TokenKind::LParen => "(",
-            TokenKind::RParen => ")",
-            TokenKind::LBrace => "{",
-            TokenKind::RBrace => "}",
-            TokenKind::LBlanket => "[",
-            TokenKind::RBlanket => "]",
-            TokenKind::Eq => "=",
-            TokenKind::Bang => "!",
-            TokenKind::Question => "?",
-            TokenKind::Colon => ":",
-            TokenKind::Semi => ";",
-            TokenKind::Comma => ",",
-            TokenKind::Dot => ".",
-
-            TokenKind::Fn => "fn",
-            TokenKind::If => "if",
-            TokenKind::Else => "else",
-            // TokenKind::For => "for",
-            // TokenKind::While => "while",
-            TokenKind::Loop => "loop",
-            TokenKind::Return => "return",
-
-            TokenKind::Ident => "ident",
-            TokenKind::Number => "number",
-            TokenKind::Whitespace => "",
-        }
-        .to_string()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -124,13 +82,16 @@ fn is_id_body(c: &char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
 }
 
+const KEYWORDS: [&str; 6] = ["fn", "let", "if", "else", "loop", "return"];
+
 fn is_keyword(id: &str) -> bool {
-    matches!(id, "fn" | "if" | "else" | "loop" | "return")
+    KEYWORDS.contains(&id)
 }
 
 fn to_keyword(id: &str) -> Option<TokenKind> {
     match id {
         "fn" => Some(TokenKind::Fn),
+        "let" => Some(TokenKind::Let),
         "if" => Some(TokenKind::If),
         "else" => Some(TokenKind::Else),
         "loop" => Some(TokenKind::Loop),
@@ -176,7 +137,7 @@ impl<'a> Cursor<'a> {
         res
     }
 
-    fn first(&mut self) -> &char {
+    fn next(&mut self) -> &char {
         self.chars.peek().unwrap_or(&EOF_CHAR)
     }
 
@@ -193,14 +154,14 @@ impl<'a> Cursor<'a> {
     }
 
     fn is_eof(&mut self) -> bool {
-        self.chars.peek().is_none()
+        self.next() == &EOF_CHAR
     }
 
     fn token(&mut self) -> Token {
         let current_pos = self.pos;
-        match self.first() {
+        match self.next() {
             whitespace if whitespace.is_ascii_whitespace() => {
-                while self.first().is_ascii_whitespace() {
+                while self.next().is_ascii_whitespace() {
                     self.bump();
                 }
                 Token {
@@ -286,8 +247,9 @@ impl<'a> Cursor<'a> {
             }
             '/' => {
                 self.bump();
-                if self.first() == &'/' {
-                    while self.first() != &'\n' {
+                if self.next() == &'/' {
+                    // line comment
+                    while !self.is_eof() && self.next() != &'\n' {
                         self.bump();
                     }
                     self.bump();

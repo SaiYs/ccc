@@ -71,7 +71,7 @@ fn main() {
 fn test_example() {
     let s = include_str!("../example/test.sofa");
     let tokens = lexer::tokenize(s);
-    dbg!(&tokens);
+    // dbg!(&tokens);
 
     let parser = parser::SofaParser::new(&tokens);
     let ast = parser.parse();

@@ -11,7 +11,8 @@ pub struct Global {
 #[derive(Debug)]
 pub struct FnDef {
     pub name: String,
-    pub args: Vec<Local>,
+    pub args: Vec<(Local, Type)>,
+    pub return_type: Type,
     pub body: Block,
 }
 
@@ -23,6 +24,8 @@ pub enum Expr {
     Loop(Loop),
     IfElse(IfElse),
     FnCall(FnCall),
+    Init(Init),
+    Assign(Assign),
     BinOp(BinOp),
     UnOp(UnOp),
     Enclosed(Enclosed),
@@ -64,6 +67,19 @@ pub struct FnCall {
 }
 
 #[derive(Debug)]
+pub struct Init {
+    pub name: Box<Expr>,
+    pub ty: Type,
+    pub value: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Assign {
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>,
+}
+
+#[derive(Debug)]
 pub struct BinOp {
     pub op: BinOpKind,
     pub lhs: Box<Expr>,
@@ -72,8 +88,7 @@ pub struct BinOp {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BinOpKind {
-    Assign, // low priority
-
+    // low priority
     Eq,
     Neq,
 
@@ -86,7 +101,8 @@ pub enum BinOpKind {
     Sub,
 
     Mul,
-    Div, // high priority
+    Div,
+    // high priority
 }
 
 #[derive(Debug)]
@@ -98,9 +114,17 @@ pub struct UnOp {
 #[derive(Debug)]
 pub enum UnOpKind {
     Neg,
-    // Ref,
-    // Deref,
+    Ref,
+    Deref,
 }
+
+#[derive(Debug)]
+pub enum Type {
+    I64,
+    Ptr(Box<Type>),
+    Void,
+}
+
 #[derive(Debug)]
 
 pub struct Enclosed {

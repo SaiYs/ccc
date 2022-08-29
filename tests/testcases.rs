@@ -5,14 +5,14 @@ mod tools;
 #[test]
 fn fn_args() {
     let s = r"
-    fn sum(c, a, b) {
+    fn sum(c: i64, a: i64, b: i64) {
         return a + b + c;
     }
 
     fn main() {
-        a = 1;
-        b = 2;
-        c = 3;
+        let a: i64 = 1;
+        let b: i64 = 2;
+        let c: i64 = 3;
         return sum(a, b, c);
     }
     ";
@@ -22,8 +22,10 @@ fn fn_args() {
 
 #[test]
 fn fib_recursion() {
+    // fib = 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
     let s = r"
-    fn fib(n) {
+    fn fib(n: i64) {
         if n <= 1 {
             1
         } else {
@@ -32,25 +34,38 @@ fn fib_recursion() {
     }
 
     fn main() {
-        a = fib(7);
+        let a: i64 = fib(7);
         return a;
     }
     ";
 
     tools::assert_exit_code(s, 21);
-    // fib = 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
 }
 
 #[test]
 fn skip_comment() {
     let s = r"
-    // let a = 0;
+    // This is line comment!
     fn main() {
-        let b = 1;
+        let b: i64 = 1;
         // b = b + 1;
         return b;
     }
     ";
 
     assert_exit_code(s, 1);
+}
+
+#[test]
+fn dereference() {
+    let s = r"
+    fn main() {
+        let a: i64 = 1;
+        let b: &i64 = &a;
+        *b = 2;
+        return a;
+    }
+    ";
+
+    assert_exit_code(s, 2);
 }

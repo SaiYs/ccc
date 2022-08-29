@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        Ast, BinOp, BinOpKind, Block, Enclosed, Expr, FnCall, FnDef, Global, IfElse, Local, Loop,
-        Number, Return, Stmt, UnOp, UnOpKind,
+        Assign, Ast, BinOp, BinOpKind, Block, Enclosed, Expr, FnCall, FnDef, Global, IfElse, Init,
+        Local, Loop, Number, Return, Stmt, Type, UnOp, UnOpKind,
     },
     lexer::{Token, TokenKind},
 };
@@ -68,8 +68,6 @@ impl<'ctx> SofaParser<'ctx> {
             Some(BinOpKind::Mul)
         } else if self.consume(&[TokenKind::Slash]) {
             Some(BinOpKind::Div)
-        } else if self.consume(&[TokenKind::Eq]) {
-            Some(BinOpKind::Assign)
         } else {
             None
         }
@@ -116,13 +114,23 @@ impl<'ctx> SofaParser<'ctx> {
         self.expect(&[TokenKind::LParen]);
         let mut args = vec![];
         while !self.consume(&[TokenKind::RParen]) {
-            args.push(self.local());
+            let local = self.local();
+            self.expect(&[TokenKind::Colon]);
+            let ty = self.ty();
+            args.push((local, ty));
             self.consume(&[TokenKind::Comma]);
         }
+
+        let return_type = if self.consume(&[TokenKind::Minus, TokenKind::Gt]) {
+            self.ty()
+        } else {
+            Type::Void
+        };
 
         FnDef {
             name: id,
             args,
+            return_type,
             body: self.block(),
         }
     }
@@ -149,21 +157,29 @@ impl<'ctx> SofaParser<'ctx> {
         let res = if self.peek(&[TokenKind::LBrace]) {
             Expr::Block(self.block())
         } else if self.consume(&[TokenKind::Return]) {
-            let res = Expr::Return(Return {
+            Expr::Return(Return {
                 expr: Box::new(self.expr()),
-            });
-            self.expect(&[TokenKind::Semi]);
-            res
+            })
         } else if self.consume(&[TokenKind::Loop]) {
             Expr::Loop(Loop { body: self.block() })
-        } else if self.consume(&[TokenKind::If]) {
-            Expr::IfElse(IfElse {
-                cond: Box::new(self.expr()),
-                if_body: self.block(),
-                else_body: self.consume(&[TokenKind::Else]).then(|| self.block()),
-            })
+        } else if self.peek(&[TokenKind::If]) {
+            Expr::IfElse(self.ifelse())
         } else if self.peek(&[TokenKind::Ident, TokenKind::LParen]) {
             Expr::FnCall(self.fn_call())
+        } else if self.peek(&[TokenKind::Let]) {
+            return Expr::Init(self.init());
+        } else if self.consume(&[TokenKind::And]) {
+            Expr::UnOp(UnOp {
+                kind: UnOpKind::Ref,
+                expr: Box::new(self.expr()),
+            })
+        } else if self.consume(&[TokenKind::Star]) {
+            Expr::UnOp(UnOp {
+                kind: UnOpKind::Deref,
+                expr: Box::new(Expr::Local(Local {
+                    name: self.expect_ident(),
+                })),
+            })
         } else if self.consume(&[TokenKind::Minus]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Neg,
@@ -183,7 +199,12 @@ impl<'ctx> SofaParser<'ctx> {
             panic!("found {:?}", self.get())
         };
 
-        if let Some(op) = self.consume_operator() {
+        if self.consume(&[TokenKind::Eq]) {
+            Expr::Assign(Assign {
+                lhs: Box::new(res),
+                rhs: Box::new(self.expr()),
+            })
+        } else if let Some(op) = self.consume_operator() {
             Expr::BinOp(BinOp {
                 op,
                 lhs: Box::new(res),
@@ -191,6 +212,15 @@ impl<'ctx> SofaParser<'ctx> {
             })
         } else {
             res
+        }
+    }
+
+    fn ifelse(&mut self) -> IfElse {
+        self.expect(&[TokenKind::If]);
+        IfElse {
+            cond: Box::new(self.expr()),
+            if_body: self.block(),
+            else_body: self.consume(&[TokenKind::Else]).then(|| self.block()),
         }
     }
 
@@ -204,6 +234,28 @@ impl<'ctx> SofaParser<'ctx> {
             self.consume(&[TokenKind::Comma]);
         }
         FnCall { name, args }
+    }
+
+    fn init(&mut self) -> Init {
+        self.expect(&[TokenKind::Let]);
+        let name = Box::new(Expr::Local(self.local()));
+        self.expect(&[TokenKind::Colon]);
+        let ty = self.ty();
+        self.expect(&[TokenKind::Eq]);
+        let value = Box::new(self.expr());
+        Init { name, ty, value }
+    }
+
+    fn ty(&mut self) -> Type {
+        if self.consume(&[TokenKind::And]) {
+            Type::Ptr(Box::new(self.ty()))
+        } else {
+            let id = self.expect_ident();
+            match id.as_str() {
+                "i64" => Type::I64,
+                _ => panic!("found unknown type {}", id),
+            }
+        }
     }
 
     fn local(&mut self) -> Local {
