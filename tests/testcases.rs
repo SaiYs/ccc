@@ -59,13 +59,18 @@ fn skip_comment() {
 #[test]
 fn dereference() {
     let s = r"
-    fn main() {
+    fn main() -> i64 {
         let a: i64 = 1;
+
         let b: &i64 = &a;
         *b = 2;
+
+        let c: &&i64 = &b;
+        **c = 3;
+
         return a;
     }
     ";
 
-    assert_exit_code(s, 2);
+    assert_exit_code(s, 3);
 }

@@ -168,18 +168,10 @@ impl<'ctx> SofaParser<'ctx> {
             Expr::FnCall(self.fn_call())
         } else if self.peek(&[TokenKind::Let]) {
             return Expr::Init(self.init());
-        } else if self.consume(&[TokenKind::And]) {
-            Expr::UnOp(UnOp {
-                kind: UnOpKind::Ref,
-                expr: Box::new(self.expr()),
-            })
-        } else if self.consume(&[TokenKind::Star]) {
-            Expr::UnOp(UnOp {
-                kind: UnOpKind::Deref,
-                expr: Box::new(Expr::Local(Local {
-                    name: self.expect_ident(),
-                })),
-            })
+        } else if self.peek(&[TokenKind::And]) {
+            self.ands()
+        } else if self.peek(&[TokenKind::Star]) {
+            self.stars()
         } else if self.consume(&[TokenKind::Minus]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Neg,
@@ -212,6 +204,32 @@ impl<'ctx> SofaParser<'ctx> {
             })
         } else {
             res
+        }
+    }
+
+    fn stars(&mut self) -> Expr {
+        if self.consume(&[TokenKind::Star]) {
+            Expr::UnOp(UnOp {
+                kind: UnOpKind::Deref,
+                expr: Box::new(self.stars()),
+            })
+        } else {
+            Expr::Local(Local {
+                name: self.expect_ident(),
+            })
+        }
+    }
+
+    fn ands(&mut self) -> Expr {
+        if self.consume(&[TokenKind::And]) {
+            Expr::UnOp(UnOp {
+                kind: UnOpKind::Ref,
+                expr: Box::new(self.ands()),
+            })
+        } else {
+            Expr::Local(Local {
+                name: self.expect_ident(),
+            })
         }
     }
 

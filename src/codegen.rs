@@ -298,6 +298,9 @@ impl<W: Write> SofaGenerater<W> {
                     writeln!(self.writer, "    push rax").unwrap();
                 }
                 UnOpKind::Ref => {
+                    // TODO:
+                    // take reference of imm is not yet supported,
+                    // like, &10 or &&a
                     self.gen_address(expr);
                 }
                 UnOpKind::Deref => {
@@ -330,10 +333,14 @@ impl<W: Write> SofaGenerater<W> {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Deref,
                 expr,
-            }) => {
-                self.gen_expr(expr);
-            }
-            _ => panic!("invalid lval"),
+            }) => match &**expr {
+                Expr::UnOp(_) => self.gen_address(expr),
+                Expr::Local(_) => {
+                    self.gen_expr(expr);
+                }
+                _ => panic!("invalid lval {:?}", expr),
+            },
+            _ => panic!("invalid lval {:?}", expr),
         }
     }
 }
