@@ -97,16 +97,17 @@ fn fib_array() {
     let s = r"
     fn main() -> i64 {
         let a: [i64; 10];
-        *a = 0;
-        *(a + 1) = 1;
+        let len = 10;
+        a[0] = 0;
+        a[1] = 1;
 
         let i = 2;
         loop {
-            if i == 10 {
-                return *(a + (10 - 1));
+            if i == len {
+                return a[len - 1];
             };
 
-            *(a + i) = *(a + (i - 1)) + *(a + (i - 2));
+            a[i] = a[i - 1] + a[i - 2];
             i = i + 1;
         }
     }

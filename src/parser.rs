@@ -13,8 +13,8 @@ pub struct SofaParser<'ctx> {
     head: usize,
     tokens: &'ctx [Token],
     /// mapping idents to signatures
-    /// TODO:
-    /// id -> (name?, type, scope)
+    // TODO:
+    // id -> (name?, type, scope)
     signatures: HashMap<String, Type>,
 }
 
@@ -58,7 +58,7 @@ impl<'ctx> SofaParser<'ctx> {
         }
     }
 
-    fn consume_operator(&mut self) -> Option<BinOpKind> {
+    fn consume_binop(&mut self) -> Option<BinOpKind> {
         if self.consume(&[TokenKind::Eq, TokenKind::Eq]) {
             Some(BinOpKind::Eq)
         } else if self.consume(&[TokenKind::Bang, TokenKind::Eq]) {
@@ -177,7 +177,7 @@ impl<'ctx> SofaParser<'ctx> {
     }
 
     fn expr1(&mut self) -> Expr {
-        if self.peek(&[TokenKind::LBrace]) {
+        let res = if self.peek(&[TokenKind::LBrace]) {
             Expr::Block(self.block())
         } else if self.consume(&[TokenKind::Return]) {
             Expr::Return(Return {
@@ -191,13 +191,11 @@ impl<'ctx> SofaParser<'ctx> {
             Expr::FnCall(self.fn_call())
         } else if self.peek(&[TokenKind::Let]) {
             Expr::Init(self.init())
-        } else if self.peek(&[TokenKind::And]) || self.peek(&[TokenKind::Star]) {
-            self.multi_unary()
-        } else if self.consume(&[TokenKind::Minus]) {
-            Expr::UnOp(UnOp {
-                kind: UnOpKind::Neg,
-                expr: Box::new(self.expr()),
-            })
+        } else if self.peek(&[TokenKind::And])
+            || self.peek(&[TokenKind::Star])
+            || self.peek(&[TokenKind::Minus])
+        {
+            self.unary()
         } else if self.consume(&[TokenKind::LParen]) {
             let res = Expr::Enclosed(Enclosed {
                 expr: Box::new(self.expr()),
@@ -210,11 +208,29 @@ impl<'ctx> SofaParser<'ctx> {
             Expr::Number(self.number())
         } else {
             panic!("found {:?}", self.get())
+        };
+
+        // postfix unary
+        if self.consume(&[TokenKind::LBlanket]) {
+            let res = Expr::UnOp(UnOp {
+                kind: UnOpKind::Deref,
+                expr: Box::new(Expr::BinOp(BinOp {
+                    op: BinOpKind::Add,
+                    lhs: Box::new(res),
+                    rhs: Box::new(self.expr()),
+                })),
+            });
+
+            self.expect(&[TokenKind::RBlanket]);
+            res
+        } else {
+            res
         }
     }
 
+    /// infix binop
     fn binop(&mut self, lhs: Expr) -> Expr {
-        if let Some(op) = self.consume_operator() {
+        if let Some(op) = self.consume_binop() {
             Expr::BinOp(BinOp {
                 op,
                 lhs: Box::new(lhs),
@@ -230,16 +246,22 @@ impl<'ctx> SofaParser<'ctx> {
         }
     }
 
-    fn multi_unary(&mut self) -> Expr {
+    /// prefix unary
+    fn unary(&mut self) -> Expr {
         if self.consume(&[TokenKind::Star]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Deref,
-                expr: Box::new(self.multi_unary()),
+                expr: Box::new(self.unary()),
             })
         } else if self.consume(&[TokenKind::And]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Ref,
-                expr: Box::new(self.multi_unary()),
+                expr: Box::new(self.unary()),
+            })
+        } else if self.consume(&[TokenKind::Minus]) {
+            Expr::UnOp(UnOp {
+                kind: UnOpKind::Neg,
+                expr: Box::new(self.expr()),
             })
         } else {
             self.expr1()

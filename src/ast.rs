@@ -64,7 +64,7 @@ impl Expr {
             Expr::BinOp(BinOp { op, lhs, rhs }) => match (op, lhs.ty(), rhs.ty()) {
                 (_, Type::I64, Type::I64) => Type::I64,
                 (BinOpKind::Add | BinOpKind::Sub, Type::Ptr { to }, Type::I64) => Type::Ptr { to },
-                (BinOpKind::Add | BinOpKind::Sub, Type::Array { element, .. }, Type::I64) => {
+                (BinOpKind::Add, Type::Array { element, .. }, Type::I64) => {
                     Type::Ptr { to: element }
                 }
                 _ => panic!("{:?} is not defined between {:?} and {:?}", op, lhs, rhs),
