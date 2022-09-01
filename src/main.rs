@@ -1,39 +1,19 @@
 mod ast;
+mod cli;
 mod codegen;
 mod lexer;
 mod parser;
 mod ty;
 
+use clap::Parser;
 use std::{
     fs::File,
     io::{stdout, Read},
 };
 
-use clap::Parser;
-
-#[derive(Debug, clap::Parser)]
-#[clap(author, version, about)]
-struct SofaC {
-    /// read input from console
-    #[clap(short, long, group = "input_type")]
-    console: Option<String>,
-
-    /// read input from file
-    #[clap(short, long, group = "input_type")]
-    file: Option<String>,
-
-    /// output file
-    #[clap(short, long, group = "output_type")]
-    out: Option<String>,
-
-    /// output to stdout
-    #[clap(short, long, group = "output_type")]
-    stdout: bool,
-}
-
 fn main() {
     // read option
-    let args = SofaC::parse();
+    let args = cli::SofaC::parse();
 
     // read input source
     let source = args
