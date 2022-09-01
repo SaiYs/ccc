@@ -10,9 +10,9 @@ fn fn_args() {
     }
 
     fn main() {
-        let a: i64 = 1;
-        let b: i64 = 2;
-        let c: i64 = 3;
+        let a = 1;
+        let b = 2;
+        let c = 3;
         return sum(a, b, c);
     }
     ";
@@ -25,7 +25,7 @@ fn fib_recursion() {
     // fib = 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
 
     let s = r"
-    fn fib(n: i64) -> i64{
+    fn fib(n: i64) -> i64 {
         if n <= 1 {
             1
         } else {
@@ -34,7 +34,7 @@ fn fib_recursion() {
     }
 
     fn main() {
-        let a: i64 = fib(7);
+        let a = fib(7);
         return a;
     }
     ";
@@ -47,7 +47,7 @@ fn skip_comment() {
     let s = r"
     // This is line comment!
     fn main() {
-        let b: i64 = 1;
+        let b = 1;
         // b = b + 1;
         return b;
     }
@@ -60,12 +60,12 @@ fn skip_comment() {
 fn dereference() {
     let s = r"
     fn main() -> i64 {
-        let a: i64 = 1;
+        let a = 1;
 
-        let b: &i64 = &a;
+        let b = &a;
         *b = 2;
 
-        let c: &&i64 = &b;
+        let c = &b;
         **c = 3;
 
         return a;
@@ -79,12 +79,12 @@ fn dereference() {
 fn ptr_offset() {
     let s = r"
     fn main() -> i64 {
-        let a: i64 = 1;
-        let b: i64 = 0;
-        let c: i64 = 102;
+        let a = 1;
+        let b = 0;
+        let c = 102;
 
-        let p: &i64 = &a;
-        let q: &i64 = p - 2;
+        let p = &a;
+        let q = p - 2;
         return *q;
     }
     ";
@@ -100,7 +100,7 @@ fn fib_array() {
         *a = 0;
         *(a + 1) = 1;
 
-        let i: i64 = 2;
+        let i = 2;
         loop {
             if i == 10 {
                 return *(a + (10 - 1));
@@ -120,3 +120,16 @@ fn fib_array() {
 
     assert_exit_code(s, fib[9]);
 }
+
+// #[test]
+// fn array_2d() {
+//     let s = r"
+//     fn main() -> i64 {
+//         let a: [[i64; 3]; 3];
+//         *(*(a + 1) + 1) = 4;
+//         return *(*(a + 1) + 1)
+//     }
+//     ";
+
+//     assert_exit_code(s, 4);
+// }

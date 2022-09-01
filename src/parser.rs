@@ -192,7 +192,7 @@ impl<'ctx> SofaParser<'ctx> {
         } else if self.peek(&[TokenKind::Let]) {
             Expr::Init(self.init())
         } else if self.peek(&[TokenKind::And]) || self.peek(&[TokenKind::Star]) {
-            self.unary()
+            self.multi_unary()
         } else if self.consume(&[TokenKind::Minus]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Neg,
@@ -230,16 +230,16 @@ impl<'ctx> SofaParser<'ctx> {
         }
     }
 
-    fn unary(&mut self) -> Expr {
+    fn multi_unary(&mut self) -> Expr {
         if self.consume(&[TokenKind::Star]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Deref,
-                expr: Box::new(self.unary()),
+                expr: Box::new(self.multi_unary()),
             })
         } else if self.consume(&[TokenKind::And]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Ref,
-                expr: Box::new(self.unary()),
+                expr: Box::new(self.multi_unary()),
             })
         } else {
             self.expr1()
@@ -275,11 +275,17 @@ impl<'ctx> SofaParser<'ctx> {
     fn init(&mut self) -> Init {
         self.expect(&[TokenKind::Let]);
         let name = self.expect_ident();
-        self.expect(&[TokenKind::Colon]);
-        let ty = self.ty();
+
+        let mut ty = if self.consume(&[TokenKind::Colon]) {
+            self.ty()
+        } else {
+            Type::Unknown
+        };
 
         let value = if self.consume(&[TokenKind::Eq]) {
-            Some(Box::new(self.expr()))
+            let expr = self.expr();
+            ty = expr.ty();
+            Some(Box::new(expr))
         } else {
             None
         };

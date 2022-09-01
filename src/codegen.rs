@@ -385,7 +385,7 @@ impl<W: Write> SofaGenerater<W> {
                 writeln!(self.writer, "    sub rax, rdi").unwrap();
             }
 
-            (BinOpKind::Add, Type::Array { element, len: _len }, Type::I64) => {
+            (BinOpKind::Add, Type::Array { element, len: _ }, Type::I64) => {
                 writeln!(self.writer, "    pop rax").unwrap();
                 writeln!(self.writer, "    imul rax, {}", element.size()).unwrap();
                 writeln!(self.writer, "    push rax").unwrap();
@@ -393,16 +393,6 @@ impl<W: Write> SofaGenerater<W> {
                 writeln!(self.writer, "    pop rax").unwrap();
 
                 writeln!(self.writer, "    add rax, rdi").unwrap();
-            }
-
-            (BinOpKind::Sub, Type::Array { element, len: _len }, Type::I64) => {
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    imul rax, {}", element.size()).unwrap();
-                writeln!(self.writer, "    push rax").unwrap();
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-
-                writeln!(self.writer, "    sub rax, rdi").unwrap();
             }
 
             _ => panic!("{:?} for {:?} and {:?} is not implemented", op, lhs, rhs),
