@@ -1,19 +1,30 @@
+use std::collections::HashMap;
+
 use crate::{
     ast::{
         Assign, Ast, BinOp, BinOpKind, Block, Enclosed, Expr, FnCall, FnDef, Global, IfElse, Init,
-        Local, Loop, Number, Return, Stmt, Type, UnOp, UnOpKind,
+        Local, Loop, Number, Return, Stmt, UnOp, UnOpKind,
     },
     lexer::{Token, TokenKind},
+    ty::Type,
 };
 
 pub struct SofaParser<'ctx> {
     head: usize,
     tokens: &'ctx [Token],
+    /// mapping idents to signatures
+    /// TODO:
+    /// id -> (name?, type, scope)
+    signatures: HashMap<String, Type>,
 }
 
 impl<'ctx> SofaParser<'ctx> {
     pub fn new(tokens: &'ctx [Token]) -> Self {
-        Self { head: 0, tokens }
+        Self {
+            head: 0,
+            tokens,
+            signatures: HashMap::new(),
+        }
     }
 
     fn is_eof(&mut self) -> bool {
@@ -72,7 +83,6 @@ impl<'ctx> SofaParser<'ctx> {
             None
         }
     }
-
     fn expect_ident(&mut self) -> String {
         let id = self.tokens[self.head].value.clone();
         self.expect(&[TokenKind::Ident]);
@@ -109,28 +119,37 @@ impl<'ctx> SofaParser<'ctx> {
 
     fn fn_def(&mut self) -> FnDef {
         self.expect(&[TokenKind::Fn]);
-        let id = self.expect_ident();
+        let name = self.expect_ident();
 
         self.expect(&[TokenKind::LParen]);
         let mut args = vec![];
         while !self.consume(&[TokenKind::RParen]) {
-            let local = self.local();
+            let name = self.expect_ident();
             self.expect(&[TokenKind::Colon]);
             let ty = self.ty();
-            args.push((local, ty));
             self.consume(&[TokenKind::Comma]);
+
+            self.signatures.insert(name.clone(), ty.clone());
+            args.push(Local { name, ty });
         }
 
-        let return_type = if self.consume(&[TokenKind::Minus, TokenKind::Gt]) {
+        let ret = if self.consume(&[TokenKind::Minus, TokenKind::Gt]) {
             self.ty()
         } else {
+            // default void
             Type::Void
         };
 
+        let fn_type = Type::Fn {
+            args: args.iter().map(|x| x.ty.clone()).collect(),
+            ret: Box::new(ret),
+        };
+        self.signatures.insert(name.clone(), fn_type.clone());
+
         FnDef {
-            name: id,
+            name,
             args,
-            return_type,
+            fn_type,
             body: self.block(),
         }
     }
@@ -153,8 +172,12 @@ impl<'ctx> SofaParser<'ctx> {
     }
 
     fn expr(&mut self) -> Expr {
-        // eager
-        let res = if self.peek(&[TokenKind::LBrace]) {
+        let a = self.expr1();
+        self.binop(a)
+    }
+
+    fn expr1(&mut self) -> Expr {
+        if self.peek(&[TokenKind::LBrace]) {
             Expr::Block(self.block())
         } else if self.consume(&[TokenKind::Return]) {
             Expr::Return(Return {
@@ -167,11 +190,9 @@ impl<'ctx> SofaParser<'ctx> {
         } else if self.peek(&[TokenKind::Ident, TokenKind::LParen]) {
             Expr::FnCall(self.fn_call())
         } else if self.peek(&[TokenKind::Let]) {
-            return Expr::Init(self.init());
-        } else if self.peek(&[TokenKind::And]) {
-            self.ands()
-        } else if self.peek(&[TokenKind::Star]) {
-            self.stars()
+            Expr::Init(self.init())
+        } else if self.peek(&[TokenKind::And]) || self.peek(&[TokenKind::Star]) {
+            self.unary()
         } else if self.consume(&[TokenKind::Minus]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Neg,
@@ -189,47 +210,39 @@ impl<'ctx> SofaParser<'ctx> {
             Expr::Number(self.number())
         } else {
             panic!("found {:?}", self.get())
-        };
-
-        if self.consume(&[TokenKind::Eq]) {
-            Expr::Assign(Assign {
-                lhs: Box::new(res),
-                rhs: Box::new(self.expr()),
-            })
-        } else if let Some(op) = self.consume_operator() {
-            Expr::BinOp(BinOp {
-                op,
-                lhs: Box::new(res),
-                rhs: Box::new(self.expr()),
-            })
-        } else {
-            res
         }
     }
 
-    fn stars(&mut self) -> Expr {
+    fn binop(&mut self, lhs: Expr) -> Expr {
+        if let Some(op) = self.consume_operator() {
+            Expr::BinOp(BinOp {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(self.expr()),
+            })
+        } else if self.consume(&[TokenKind::Eq]) {
+            Expr::Assign(Assign {
+                lhs: Box::new(lhs),
+                rhs: Box::new(self.expr()),
+            })
+        } else {
+            lhs
+        }
+    }
+
+    fn unary(&mut self) -> Expr {
         if self.consume(&[TokenKind::Star]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Deref,
-                expr: Box::new(self.stars()),
+                expr: Box::new(self.unary()),
             })
-        } else {
-            Expr::Local(Local {
-                name: self.expect_ident(),
-            })
-        }
-    }
-
-    fn ands(&mut self) -> Expr {
-        if self.consume(&[TokenKind::And]) {
+        } else if self.consume(&[TokenKind::And]) {
             Expr::UnOp(UnOp {
                 kind: UnOpKind::Ref,
-                expr: Box::new(self.ands()),
+                expr: Box::new(self.unary()),
             })
         } else {
-            Expr::Local(Local {
-                name: self.expect_ident(),
-            })
+            self.expr1()
         }
     }
 
@@ -251,35 +264,64 @@ impl<'ctx> SofaParser<'ctx> {
             args.push(self.expr());
             self.consume(&[TokenKind::Comma]);
         }
-        FnCall { name, args }
+
+        FnCall {
+            fn_type: self.signatures[&name].clone(),
+            name,
+            args,
+        }
     }
 
     fn init(&mut self) -> Init {
         self.expect(&[TokenKind::Let]);
-        let name = Box::new(Expr::Local(self.local()));
+        let name = self.expect_ident();
         self.expect(&[TokenKind::Colon]);
         let ty = self.ty();
-        self.expect(&[TokenKind::Eq]);
-        let value = Box::new(self.expr());
-        Init { name, ty, value }
+
+        let value = if self.consume(&[TokenKind::Eq]) {
+            Some(Box::new(self.expr()))
+        } else {
+            None
+        };
+
+        self.signatures.insert(name.clone(), ty.clone());
+
+        Init {
+            name: Box::new(Expr::Local(Local { name, ty })),
+            value,
+        }
     }
 
     fn ty(&mut self) -> Type {
         if self.consume(&[TokenKind::And]) {
-            Type::Ptr(Box::new(self.ty()))
+            Type::Ptr {
+                to: Box::new(self.ty()),
+            }
+        } else if self.consume(&[TokenKind::LBlanket]) {
+            let ty = self.ty();
+            self.expect(&[TokenKind::Semi]);
+            let len = self.expect_number().parse().unwrap();
+            self.expect(&[TokenKind::RBlanket]);
+
+            Type::Array {
+                element: Box::new(ty),
+                len,
+            }
         } else {
             let id = self.expect_ident();
             match id.as_str() {
                 "i64" => Type::I64,
+                "void" => Type::Void,
+                "never" => Type::Never,
                 _ => panic!("found unknown type {}", id),
             }
         }
     }
 
     fn local(&mut self) -> Local {
-        Local {
-            name: self.expect_ident(),
-        }
+        let name = self.expect_ident();
+        let ty = self.signatures[&name].clone();
+        Local { ty, name }
     }
 
     fn number(&mut self) -> Number {

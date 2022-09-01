@@ -2,8 +2,12 @@ mod ast;
 mod codegen;
 mod lexer;
 mod parser;
+mod ty;
 
-use std::{fs::File, io::Read};
+use std::{
+    fs::File,
+    io::{stdout, Read},
+};
 
 use clap::Parser;
 
@@ -51,7 +55,7 @@ fn main() {
 
     // generate assembly
     if args.stdout {
-        let mut generater = codegen::SofaGenerater::default();
+        let mut generater = codegen::SofaGenerater::new(stdout());
         generater.gen(&ast);
     } else {
         let out = args.out.unwrap_or_else(|| "tmp.s".to_string());

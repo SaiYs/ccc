@@ -1,3 +1,5 @@
+use crate::ty::Type;
+
 #[derive(Debug)]
 pub struct Ast {
     pub node: Global,
@@ -11,8 +13,8 @@ pub struct Global {
 #[derive(Debug)]
 pub struct FnDef {
     pub name: String,
-    pub args: Vec<(Local, Type)>,
-    pub return_type: Type,
+    pub args: Vec<Local>,
+    pub fn_type: Type,
     pub body: Block,
 }
 
@@ -31,6 +33,58 @@ pub enum Expr {
     Enclosed(Enclosed),
     Local(Local),
     Number(Number),
+}
+
+impl Expr {
+    pub fn ty(&self) -> Type {
+        match self {
+            Expr::Stmt(_) => Type::Void,
+            Expr::Block(Block { exprs }) => {
+                exprs.last().map_or(Type::Void, |last_expr| last_expr.ty())
+            }
+            Expr::Return(_) => Type::Never,
+            Expr::Loop(_) => Type::Never,
+            Expr::IfElse(IfElse {
+                cond: _,
+                if_body,
+                else_body: _,
+            }) => if_body
+                .exprs
+                .last()
+                .map_or(Type::Void, |last_expr| last_expr.ty()),
+            Expr::FnCall(FnCall { fn_type, .. }) => {
+                if let Type::Fn { ret, .. } = fn_type {
+                    *ret.clone()
+                } else {
+                    panic!("function's type must be Fn")
+                }
+            }
+            Expr::Init(_) => Type::Void,
+            Expr::Assign(_) => Type::Void,
+            Expr::BinOp(BinOp { op, lhs, rhs }) => match (op, lhs.ty(), rhs.ty()) {
+                (_, Type::I64, Type::I64) => Type::I64,
+                (BinOpKind::Add | BinOpKind::Sub, Type::Ptr { to }, Type::I64) => Type::Ptr { to },
+                (BinOpKind::Add | BinOpKind::Sub, Type::Array { element, .. }, Type::I64) => {
+                    Type::Ptr { to: element }
+                }
+                _ => panic!("{:?} is not defined between {:?} and {:?}", op, lhs, rhs),
+            },
+            Expr::UnOp(UnOp { kind, expr }) => match kind {
+                UnOpKind::Neg => expr.ty(),
+                UnOpKind::Ref => Type::Ptr {
+                    to: Box::new(expr.ty()),
+                },
+                UnOpKind::Deref => match expr.ty() {
+                    Type::Ptr { to } => *to,
+                    Type::Array { element, .. } => *element,
+                    _ => panic!("only pointer type can be dereferenced"),
+                },
+            },
+            Expr::Enclosed(Enclosed { expr }) => expr.ty(),
+            Expr::Local(Local { ty, .. }) => ty.clone(),
+            Expr::Number(_) => Type::I64,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -64,13 +118,13 @@ pub struct IfElse {
 pub struct FnCall {
     pub name: String,
     pub args: Vec<Expr>,
+    pub fn_type: Type,
 }
 
 #[derive(Debug)]
 pub struct Init {
     pub name: Box<Expr>,
-    pub ty: Type,
-    pub value: Box<Expr>,
+    pub value: Option<Box<Expr>>,
 }
 
 #[derive(Debug)]
@@ -119,13 +173,6 @@ pub enum UnOpKind {
 }
 
 #[derive(Debug)]
-pub enum Type {
-    I64,
-    Ptr(Box<Type>),
-    Void,
-}
-
-#[derive(Debug)]
 
 pub struct Enclosed {
     pub expr: Box<Expr>,
@@ -134,6 +181,7 @@ pub struct Enclosed {
 #[derive(Debug)]
 pub struct Local {
     pub name: String,
+    pub ty: Type,
 }
 
 #[derive(Debug)]

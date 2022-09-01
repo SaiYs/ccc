@@ -25,7 +25,7 @@ fn fib_recursion() {
     // fib = 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
 
     let s = r"
-    fn fib(n: i64) {
+    fn fib(n: i64) -> i64{
         if n <= 1 {
             1
         } else {
@@ -73,4 +73,50 @@ fn dereference() {
     ";
 
     assert_exit_code(s, 3);
+}
+
+#[test]
+fn ptr_offset() {
+    let s = r"
+    fn main() -> i64 {
+        let a: i64 = 1;
+        let b: i64 = 0;
+        let c: i64 = 102;
+
+        let p: &i64 = &a;
+        let q: &i64 = p - 2;
+        return *q;
+    }
+    ";
+
+    assert_exit_code(s, 102);
+}
+
+#[test]
+fn fib_array() {
+    let s = r"
+    fn main() -> i64 {
+        let a: [i64; 10];
+        *a = 0;
+        *(a + 1) = 1;
+
+        let i: i64 = 2;
+        loop {
+            if i == 10 {
+                return *(a + (10 - 1));
+            };
+
+            *(a + i) = *(a + (i - 1)) + *(a + (i - 2));
+            i = i + 1;
+        }
+    }
+    ";
+
+    let mut fib = vec![0; 10];
+    fib[1] = 1;
+    for i in 2..10 {
+        fib[i] = fib[i - 1] + fib[i - 2];
+    }
+
+    assert_exit_code(s, fib[9]);
 }
