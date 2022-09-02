@@ -31,6 +31,7 @@ pub enum Expr {
     BinOp(BinOp),
     UnOp(UnOp),
     Enclosed(Enclosed),
+    Bool(Bool),
     Local(Local),
     Number(Number),
 }
@@ -62,7 +63,29 @@ impl Expr {
             Expr::Init(_) => Type::Void,
             Expr::Assign(_) => Type::Void,
             Expr::BinOp(BinOp { op, lhs, rhs }) => match (op, lhs.ty(), rhs.ty()) {
-                (_, Type::I64, Type::I64) => Type::I64,
+                (
+                    BinOpKind::Add
+                    | BinOpKind::Sub
+                    | BinOpKind::Mul
+                    | BinOpKind::Div
+                    | BinOpKind::Rem
+                    | BinOpKind::BitAnd
+                    | BinOpKind::BitOr
+                    | BinOpKind::BitXor,
+                    Type::I64,
+                    Type::I64,
+                ) => Type::I64,
+                (
+                    BinOpKind::LeEq
+                    | BinOpKind::Le
+                    | BinOpKind::Gt
+                    | BinOpKind::GtEq
+                    | BinOpKind::Eq
+                    | BinOpKind::Neq,
+                    a,
+                    b,
+                ) if a == b => Type::Bool,
+                (BinOpKind::LogAnd | BinOpKind::LogOr, Type::Bool, Type::Bool) => Type::Bool,
                 (BinOpKind::Add | BinOpKind::Sub, Type::Ptr { to }, Type::I64) => Type::Ptr { to },
                 (BinOpKind::Add, Type::Array { element, .. }, Type::I64) => {
                     Type::Ptr { to: element }
@@ -81,8 +104,9 @@ impl Expr {
                 },
             },
             Expr::Enclosed(Enclosed { expr }) => expr.ty(),
+            Expr::Bool(..) => Type::Bool,
             Expr::Local(Local { ty, .. }) => ty.clone(),
-            Expr::Number(_) => Type::I64,
+            Expr::Number(..) => Type::I64,
         }
     }
 }
@@ -142,21 +166,27 @@ pub struct BinOp {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BinOpKind {
-    // low priority
     Eq,
     Neq,
 
     LeEq,
     Le,
-    GeEq,
-    Ge,
+    GtEq,
+    Gt,
 
     Add,
     Sub,
 
     Mul,
     Div,
-    // high priority
+    Rem,
+
+    BitAnd,
+    BitOr,
+    BitXor,
+
+    LogAnd,
+    LogOr,
 }
 
 #[derive(Debug)]
@@ -176,6 +206,12 @@ pub enum UnOpKind {
 
 pub struct Enclosed {
     pub expr: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub enum Bool {
+    True,
+    False,
 }
 
 #[derive(Debug)]

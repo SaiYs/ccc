@@ -122,15 +122,26 @@ fn fib_array() {
     assert_exit_code(s, fib[9]);
 }
 
-// #[test]
-// fn array_2d() {
-//     let s = r"
-//     fn main() -> i64 {
-//         let a: [[i64; 3]; 3];
-//         *(*(a + 1) + 1) = 4;
-//         return *(*(a + 1) + 1)
-//     }
-//     ";
+#[test]
+fn short() {
+    let s = r"
+    fn main() -> i64 {
+        let a = true;
+        let b = false;
 
-//     assert_exit_code(s, 4);
-// }
+        let res = if a && b {
+            2
+        } else {
+            if a || b {
+                1
+            } else {
+                0
+            }
+        };
+
+        return res;
+    }
+    ";
+
+    assert_exit_code(s, 1);
+}

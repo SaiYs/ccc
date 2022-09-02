@@ -58,12 +58,13 @@ impl<W: Write> SofaGenerater<W> {
 
     fn gen_fn(&mut self, f: &FnDef) {
         // stack_size should be a multiple of 16;
-        let stack_size = if f.name == "main" {
-            MAX_STACK_SIZE
+        let (name, stack_size) = if f.name == "main" {
+            ("main".to_string(), MAX_STACK_SIZE)
         } else {
-            (f.args.len() + 1) / 2 * 2 * 8
+            (f.name.clone(), (f.args.len() + 1) / 2 * 2 * 8)
         };
-        self.gen_prologue(&f.name, stack_size);
+
+        self.gen_prologue(&name, stack_size);
 
         if !f.args.is_empty() {
             writeln!(self.writer, "    mov rax, rbp").unwrap();
@@ -136,7 +137,9 @@ impl<W: Write> SofaGenerater<W> {
                     let label_end = format!(".L{}_end", self.label_id);
                     self.label_id += 1;
 
+                    assert_eq!(cond.ty(), Type::Bool);
                     self.gen_expr(cond);
+
                     writeln!(self.writer, "    pop rax").unwrap();
                     writeln!(self.writer, "    cmp rax, 0").unwrap();
                     writeln!(self.writer, "    je {}", label_else).unwrap();
@@ -239,6 +242,10 @@ impl<W: Write> SofaGenerater<W> {
                 }
             },
             Expr::Enclosed(Enclosed { expr }) => self.gen_expr(expr),
+            Expr::Bool(boolean) => match boolean {
+                crate::ast::Bool::True => writeln!(self.writer, "    push 1").unwrap(),
+                crate::ast::Bool::False => writeln!(self.writer, "    push 0").unwrap(),
+            },
             Expr::Local(local) => {
                 self.gen_address(expr);
 
@@ -281,91 +288,35 @@ impl<W: Write> SofaGenerater<W> {
     }
 
     fn gen_binop(&mut self, BinOp { op, lhs, rhs }: &BinOp) {
-        self.gen_expr(lhs);
-        self.gen_expr(rhs);
-
         match (op, lhs.ty(), rhs.ty()) {
-            (BinOpKind::Eq, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
+            (
+                BinOpKind::Add
+                | BinOpKind::Sub
+                | BinOpKind::Mul
+                | BinOpKind::Div
+                | BinOpKind::Rem
+                | BinOpKind::BitAnd
+                | BinOpKind::BitOr
+                | BinOpKind::BitXor,
+                Type::I64,
+                Type::I64,
+            ) => self.gen_math(op, lhs, rhs),
 
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    sete al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::Neq, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    setne al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::LeEq, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    setle al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::Le, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    setl al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::GeEq, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    pop rdi").unwrap();
-
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    setle al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::Ge, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    pop rdi").unwrap();
-
-                writeln!(self.writer, "    cmp rax, rdi").unwrap();
-                writeln!(self.writer, "    setl al").unwrap();
-                writeln!(self.writer, "    movzb rax, al").unwrap();
-            }
-
-            (BinOpKind::Add, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    add rax, rdi").unwrap();
-            }
-
-            (BinOpKind::Sub, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    sub rax, rdi").unwrap();
-            }
-
-            (BinOpKind::Mul, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-                writeln!(self.writer, "    imul rax, rdi").unwrap();
-            }
-
-            (BinOpKind::Div, Type::I64, Type::I64) => {
-                writeln!(self.writer, "    pop rdi").unwrap();
-                writeln!(self.writer, "    pop rax").unwrap();
-
-                writeln!(self.writer, "    cqo").unwrap();
-                writeln!(self.writer, "    idiv rdi").unwrap();
-            }
+            (
+                BinOpKind::Eq
+                | BinOpKind::Neq
+                | BinOpKind::LeEq
+                | BinOpKind::Le
+                | BinOpKind::GtEq
+                | BinOpKind::Gt,
+                Type::I64,
+                Type::I64,
+            ) => self.gen_cmp(op, lhs, rhs),
 
             (BinOpKind::Add, Type::Ptr { to }, Type::I64) => {
+                self.gen_expr(lhs);
+                self.gen_expr(rhs);
+
                 writeln!(self.writer, "    pop rax").unwrap();
                 writeln!(self.writer, "    imul rax, {}", to.size()).unwrap();
                 writeln!(self.writer, "    push rax").unwrap();
@@ -376,6 +327,9 @@ impl<W: Write> SofaGenerater<W> {
             }
 
             (BinOpKind::Sub, Type::Ptr { to }, Type::I64) => {
+                self.gen_expr(lhs);
+                self.gen_expr(rhs);
+
                 writeln!(self.writer, "    pop rax").unwrap();
                 writeln!(self.writer, "    imul rax, {}", to.size()).unwrap();
                 writeln!(self.writer, "    push rax").unwrap();
@@ -386,6 +340,9 @@ impl<W: Write> SofaGenerater<W> {
             }
 
             (BinOpKind::Add, Type::Array { element, len: _ }, Type::I64) => {
+                self.gen_expr(lhs);
+                self.gen_expr(rhs);
+
                 writeln!(self.writer, "    pop rax").unwrap();
                 writeln!(self.writer, "    imul rax, {}", element.size()).unwrap();
                 writeln!(self.writer, "    push rax").unwrap();
@@ -395,9 +352,115 @@ impl<W: Write> SofaGenerater<W> {
                 writeln!(self.writer, "    add rax, rdi").unwrap();
             }
 
+            (BinOpKind::LogAnd, Type::Bool, Type::Bool) => {
+                let label1 = format!(".L{}_short", self.label_id);
+                self.label_id += 1;
+                let label2 = format!(".L{}_short", self.label_id);
+                self.label_id += 1;
+
+                self.gen_expr(lhs);
+                writeln!(self.writer, "    pop rax").unwrap();
+                writeln!(self.writer, "    cmp rax, 0").unwrap();
+                writeln!(self.writer, "    je {}", label1).unwrap();
+
+                self.gen_expr(rhs);
+                writeln!(self.writer, "    pop rax").unwrap();
+                writeln!(self.writer, "    cmp rax, 0").unwrap();
+                writeln!(self.writer, "    je {}", label1).unwrap();
+
+                writeln!(self.writer, "    mov rax, 1").unwrap();
+                writeln!(self.writer, "    jmp {}", label2).unwrap();
+
+                writeln!(self.writer, "{}:", label1).unwrap();
+                writeln!(self.writer, "    mov rax, 0").unwrap();
+
+                writeln!(self.writer, "{}:", label2).unwrap();
+            }
+
+            (BinOpKind::LogOr, Type::Bool, Type::Bool) => {
+                let label1 = format!(".L{}_short", self.label_id);
+                self.label_id += 1;
+                let label2 = format!(".L{}_short", self.label_id);
+                self.label_id += 1;
+                let label3 = format!(".L{}_short", self.label_id);
+                self.label_id += 1;
+
+                self.gen_expr(lhs);
+                writeln!(self.writer, "    pop rax").unwrap();
+                writeln!(self.writer, "    cmp rax, 0").unwrap();
+                writeln!(self.writer, "    jne {}", label1).unwrap();
+
+                self.gen_expr(rhs);
+                writeln!(self.writer, "    pop rax").unwrap();
+                writeln!(self.writer, "    cmp rax, 0").unwrap();
+                writeln!(self.writer, "    je {}", label2).unwrap();
+
+                writeln!(self.writer, "{}:", label1).unwrap();
+                writeln!(self.writer, "    mov rax, 1").unwrap();
+                writeln!(self.writer, "    jmp {}", label3).unwrap();
+
+                writeln!(self.writer, "{}:", label2).unwrap();
+                writeln!(self.writer, "    mov rax, 0").unwrap();
+
+                writeln!(self.writer, "{}:", label3).unwrap();
+            }
+
             _ => panic!("{:?} for {:?} and {:?} is not implemented", op, lhs, rhs),
         }
 
         writeln!(self.writer, "    push rax").unwrap();
+    }
+
+    fn gen_math(&mut self, op: &BinOpKind, lhs: &Expr, rhs: &Expr) {
+        self.gen_expr(lhs);
+        self.gen_expr(rhs);
+
+        writeln!(self.writer, "    pop rdi").unwrap();
+        writeln!(self.writer, "    pop rax").unwrap();
+
+        match op {
+            BinOpKind::Add => writeln!(self.writer, "    add rax, rdi").unwrap(),
+            BinOpKind::Sub => writeln!(self.writer, "    sub rax, rdi").unwrap(),
+            BinOpKind::Mul => writeln!(self.writer, "    imul rax, rdi").unwrap(),
+            BinOpKind::Div => {
+                writeln!(self.writer, "    cqo").unwrap();
+                writeln!(self.writer, "    idiv rdi").unwrap();
+            }
+            BinOpKind::Rem => {
+                writeln!(self.writer, "    cqo").unwrap();
+                writeln!(self.writer, "    idiv rdi").unwrap();
+                writeln!(self.writer, "    mov rax, rdx").unwrap();
+            }
+            BinOpKind::BitAnd => writeln!(self.writer, "    and rax, rdi").unwrap(),
+            BinOpKind::BitOr => writeln!(self.writer, "    or rax, rdi").unwrap(),
+            BinOpKind::BitXor => writeln!(self.writer, "    xor rax, rdi").unwrap(),
+            _ => unreachable!(),
+        };
+    }
+
+    fn gen_cmp(&mut self, op: &BinOpKind, lhs: &Expr, rhs: &Expr) {
+        self.gen_expr(lhs);
+        self.gen_expr(rhs);
+        if matches!(op, BinOpKind::Gt | BinOpKind::GtEq) {
+            writeln!(self.writer, "    pop rax").unwrap();
+            writeln!(self.writer, "    pop rdi").unwrap();
+        } else {
+            writeln!(self.writer, "    pop rdi").unwrap();
+            writeln!(self.writer, "    pop rax").unwrap();
+        }
+        writeln!(self.writer, "    cmp rax, rdi").unwrap();
+        writeln!(
+            self.writer,
+            "    {} al",
+            match op {
+                BinOpKind::Eq => "sete",
+                BinOpKind::Neq => "setne",
+                BinOpKind::LeEq | BinOpKind::GtEq => "setle",
+                BinOpKind::Le | BinOpKind::Gt => "setl",
+                _ => unreachable!(),
+            }
+        )
+        .unwrap();
+        writeln!(self.writer, "    movzb rax, al").unwrap();
     }
 }

@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     I64,
+    Bool,
     Ptr {
         to: Box<Type>,
     },
@@ -25,7 +26,11 @@ impl Type {
             Type::I64 => 8,
             Type::Ptr { .. } => 8,
             Type::Array { element, len } => element.size() * len,
-            _ => todo!(),
+            Type::Bool => 8,
+            Type::Fn { .. } => todo!(),
+            Type::Void => todo!(),
+            Type::Never => todo!(),
+            Type::Unknown => todo!(),
         }
     }
 }

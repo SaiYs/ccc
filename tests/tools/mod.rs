@@ -13,7 +13,12 @@ pub(crate) fn assert_exit_code(s: &str, expected: i32) {
         .unwrap();
 
     let _ = Command::new("gcc")
-        .args([test_asm_name.as_str(), "-o", test_bin_name.as_str()])
+        .args([
+            test_asm_name.as_str(),
+            "-o",
+            test_bin_name.as_str(),
+            "-static",
+        ])
         .spawn()
         .expect("failed to assemble with gcc")
         .wait()

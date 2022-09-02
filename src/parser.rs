@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{
-        Assign, Ast, BinOp, BinOpKind, Block, Enclosed, Expr, FnCall, FnDef, Global, IfElse, Init,
-        Local, Loop, Number, Return, Stmt, UnOp, UnOpKind,
+        Assign, Ast, BinOp, BinOpKind, Block, Bool, Enclosed, Expr, FnCall, FnDef, Global, IfElse,
+        Init, Local, Loop, Number, Return, Stmt, UnOp, UnOpKind,
     },
     lexer::{Token, TokenKind},
     ty::Type,
@@ -35,10 +35,6 @@ impl<'ctx> SofaParser<'ctx> {
         &self.tokens[self.head]
     }
 
-    fn skip(&mut self) {
-        self.head += 1;
-    }
-
     fn peek(&mut self, target: &[TokenKind]) -> bool {
         (0..target.len()).all(|i| !self.is_eof() && self.tokens[self.head + i].kind == target[i])
     }
@@ -68,9 +64,9 @@ impl<'ctx> SofaParser<'ctx> {
         } else if self.consume(&[TokenKind::Lt]) {
             Some(BinOpKind::Le)
         } else if self.consume(&[TokenKind::Gt, TokenKind::Eq]) {
-            Some(BinOpKind::GeEq)
+            Some(BinOpKind::GtEq)
         } else if self.consume(&[TokenKind::Gt]) {
-            Some(BinOpKind::Ge)
+            Some(BinOpKind::Gt)
         } else if self.consume(&[TokenKind::Plus]) {
             Some(BinOpKind::Add)
         } else if self.consume(&[TokenKind::Minus]) {
@@ -79,10 +75,23 @@ impl<'ctx> SofaParser<'ctx> {
             Some(BinOpKind::Mul)
         } else if self.consume(&[TokenKind::Slash]) {
             Some(BinOpKind::Div)
+        } else if self.consume(&[TokenKind::Percent]) {
+            Some(BinOpKind::Rem)
+        } else if self.consume(&[TokenKind::And, TokenKind::And]) {
+            Some(BinOpKind::LogAnd)
+        } else if self.consume(&[TokenKind::Or, TokenKind::Or]) {
+            Some(BinOpKind::LogOr)
+        } else if self.consume(&[TokenKind::And]) {
+            Some(BinOpKind::BitAnd)
+        } else if self.consume(&[TokenKind::Or]) {
+            Some(BinOpKind::BitOr)
+        } else if self.consume(&[TokenKind::Caret]) {
+            Some(BinOpKind::BitXor)
         } else {
             None
         }
     }
+
     fn expect_ident(&mut self) -> String {
         let id = self.tokens[self.head].value.clone();
         self.expect(&[TokenKind::Ident]);
@@ -202,6 +211,10 @@ impl<'ctx> SofaParser<'ctx> {
             });
             self.expect(&[TokenKind::RParen]);
             res
+        } else if self.consume(&[TokenKind::True]) {
+            Expr::Bool(Bool::True)
+        } else if self.consume(&[TokenKind::False]) {
+            Expr::Bool(Bool::False)
         } else if self.peek(&[TokenKind::Ident]) {
             Expr::Local(self.local())
         } else if self.peek(&[TokenKind::Number]) {
@@ -212,17 +225,7 @@ impl<'ctx> SofaParser<'ctx> {
 
         // postfix unary
         if self.consume(&[TokenKind::LBlanket]) {
-            let res = Expr::UnOp(UnOp {
-                kind: UnOpKind::Deref,
-                expr: Box::new(Expr::BinOp(BinOp {
-                    op: BinOpKind::Add,
-                    lhs: Box::new(res),
-                    rhs: Box::new(self.expr()),
-                })),
-            });
-
-            self.expect(&[TokenKind::RBlanket]);
-            res
+            self.index(res)
         } else {
             res
         }
@@ -268,6 +271,20 @@ impl<'ctx> SofaParser<'ctx> {
         }
     }
 
+    fn index(&mut self, lhs: Expr) -> Expr {
+        let res = Expr::UnOp(UnOp {
+            kind: UnOpKind::Deref,
+            expr: Box::new(Expr::BinOp(BinOp {
+                op: BinOpKind::Add,
+                lhs: Box::new(lhs),
+                rhs: Box::new(self.expr()),
+            })),
+        });
+
+        self.expect(&[TokenKind::RBlanket]);
+        res
+    }
+
     fn ifelse(&mut self) -> IfElse {
         self.expect(&[TokenKind::If]);
         IfElse {
@@ -279,7 +296,7 @@ impl<'ctx> SofaParser<'ctx> {
 
     fn fn_call(&mut self) -> FnCall {
         let name = self.expect_ident();
-        self.skip();
+        self.expect(&[TokenKind::LParen]);
 
         let mut args = vec![];
         while !self.consume(&[TokenKind::RParen]) {
@@ -288,7 +305,7 @@ impl<'ctx> SofaParser<'ctx> {
         }
 
         FnCall {
-            fn_type: self.signatures[&name].clone(),
+            fn_type: self.signatures.get(&name).unwrap_or(&Type::Unknown).clone(),
             name,
             args,
         }

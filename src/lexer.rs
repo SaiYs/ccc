@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // punctuations
     /// +
@@ -10,7 +10,7 @@ pub enum TokenKind {
     /// /
     Slash,
     /// %
-    // Percent,
+    Percent,
     /// &
     And,
     /// |
@@ -53,15 +53,18 @@ pub enum TokenKind {
     Let,
     If,
     Else,
-    // For,
-    // While,
     Loop,
     Return,
+
+    /// boolean
+    True,
+    False,
 
     /// identifier
     Ident,
     /// number literal
     Number,
+
     /// whitespace
     Whitespace,
     // EOF,
@@ -82,22 +85,25 @@ fn is_id_body(c: &char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
 }
 
-const KEYWORDS: [&str; 6] = ["fn", "let", "if", "else", "loop", "return"];
-
-fn is_keyword(id: &str) -> bool {
-    KEYWORDS.contains(&id)
-}
+const KEYWORDS: &[(&str, TokenKind)] = &[
+    ("fn", TokenKind::Fn),
+    ("let", TokenKind::Let),
+    ("if", TokenKind::If),
+    ("else", TokenKind::Else),
+    ("loop", TokenKind::Loop),
+    ("return", TokenKind::Return),
+    ("true", TokenKind::True),
+    ("false", TokenKind::False),
+];
 
 fn to_keyword(id: &str) -> Option<TokenKind> {
-    match id {
-        "fn" => Some(TokenKind::Fn),
-        "let" => Some(TokenKind::Let),
-        "if" => Some(TokenKind::If),
-        "else" => Some(TokenKind::Else),
-        "loop" => Some(TokenKind::Loop),
-        "return" => Some(TokenKind::Return),
-        _ => None,
+    for (token, kind) in KEYWORDS.iter().copied() {
+        if token == id {
+            return Some(kind);
+        }
     }
+
+    None
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -180,9 +186,9 @@ impl<'a> Cursor<'a> {
                     .collect::<String>();
                 self.consume(&id);
 
-                if is_keyword(&id) {
+                if let Some(kind) = to_keyword(&id) {
                     Token {
-                        kind: to_keyword(&id).unwrap(),
+                        kind,
                         value: None,
                         pos: self.update_pos(),
                     }
@@ -264,6 +270,14 @@ impl<'a> Cursor<'a> {
                         value: None,
                         pos: self.update_pos(),
                     }
+                }
+            }
+            '%' => {
+                self.bump();
+                Token {
+                    kind: TokenKind::Percent,
+                    value: None,
+                    pos: self.update_pos(),
                 }
             }
             '&' => {
